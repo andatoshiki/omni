@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 
 	"github.com/andatoshiki/omni/internal/providers"
 )
@@ -12,7 +12,7 @@ import (
 func TestTokenUsageIsAggregatedPerUserAndChat(t *testing.T) {
 	t.Parallel()
 
-	connection, err := sql.Open("sqlite3", ":memory:")
+	connection, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestTokenUsageIsAggregatedPerUserAndChat(t *testing.T) {
 func TestConversationStringContentRoundTrips(t *testing.T) {
 	t.Parallel()
 
-	connection, err := sql.Open("sqlite3", ":memory:")
+	connection, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}

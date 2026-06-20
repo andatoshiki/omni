@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"os"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 
 	"github.com/andatoshiki/omni/internal/providers"
 )
@@ -55,7 +55,7 @@ type Database struct {
 
 // Open initializes the SQLite database.
 func Open(filename string) (*Database, error) {
-	sqliteDatabase, err := sql.Open("sqlite3", filename)
+	sqliteDatabase, err := sql.Open("sqlite", filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
