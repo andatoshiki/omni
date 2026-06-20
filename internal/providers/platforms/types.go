@@ -1,5 +1,10 @@
 package platforms
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Endpoint contains the connection details shared by provider platforms.
 type Endpoint struct {
 	APIKey  string
@@ -15,6 +20,19 @@ type ChatMessage struct {
 type MediaData struct {
 	MIMEType string
 	Data     []byte
+}
+
+// UnsupportedMediaError reports media that an adapter cannot send without
+// silently discarding part of the user's request.
+type UnsupportedMediaError struct {
+	Types []string
+}
+
+func (e *UnsupportedMediaError) Error() string {
+	return fmt.Sprintf(
+		"selected model cannot process %s media with this provider; select a compatible model with /model",
+		strings.Join(e.Types, ", "),
+	)
 }
 
 // ChatContentPart is one item in an OpenAI-compatible multimodal message.

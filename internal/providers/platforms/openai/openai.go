@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,30 +37,12 @@ func (a Adapter) CreateChatCompletionStream(
 		return nil, errors.New("request cannot be nil")
 	}
 
+	if unsupported := unsupportedMediaTypes(request.Messages); len(unsupported) > 0 {
+		return nil, &platforms.UnsupportedMediaError{Types: unsupported}
+	}
+
 	request.Stream = true
 	request.StreamOptions.IncludeUsage = true
-
-	// Sanitize messages for OpenAI compatibility
-	for i := range request.Messages {
-		if parts, ok := request.Messages[i].Content.([]platforms.ChatContentPart); ok {
-			var sanitized []platforms.ChatContentPart
-			hasUnsupportedMedia := false
-			for _, part := range parts {
-				if part.Type == "text" || part.Type == "image_url" {
-					sanitized = append(sanitized, part)
-				} else {
-					hasUnsupportedMedia = true
-				}
-			}
-			if len(sanitized) == 0 && hasUnsupportedMedia {
-				sanitized = append(sanitized, platforms.ChatContentPart{
-					Type: "text",
-					Text: "[User attached an audio/video file that this model cannot process]",
-				})
-			}
-			request.Messages[i].Content = sanitized
-		}
-	}
 
 	body, err := json.Marshal(request)
 	if err != nil {
@@ -89,4 +72,31 @@ func (a Adapter) CreateChatCompletionStream(
 	}
 
 	return platforms.NewChatCompletionStream(response), nil
+}
+
+func unsupportedMediaTypes(messages []platforms.ChatMessage) []string {
+	types := make(map[string]struct{})
+	for _, message := range messages {
+		parts, ok := message.Content.([]platforms.ChatContentPart)
+		if !ok {
+			continue
+		}
+		for _, part := range parts {
+			if part.Type == "text" || part.Type == "image_url" {
+				continue
+			}
+			mediaType := strings.TrimSpace(part.Type)
+			if mediaType == "" {
+				mediaType = "unknown"
+			}
+			types[mediaType] = struct{}{}
+		}
+	}
+
+	result := make([]string, 0, len(types))
+	for mediaType := range types {
+		result = append(result, mediaType)
+	}
+	slices.Sort(result)
+	return result
 }

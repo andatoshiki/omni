@@ -106,6 +106,59 @@ func TestCreateChatCompletionStreamBoundsAPIErrorBody(t *testing.T) {
 	}
 }
 
+func TestCreateChatCompletionStreamRejectsUnsupportedMediaBeforeRequest(t *testing.T) {
+	requestSent := false
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requestSent = true
+		return nil, errors.New("HTTP request must not be sent")
+	})}
+
+	_, err := (Adapter{HTTPClient: client}).CreateChatCompletionStream(
+		context.Background(),
+		platforms.Endpoint{BaseURL: "https://api.example.test", APIKey: "test-key"},
+		&platforms.ChatCompletionStreamRequest{
+			Model: "test-model",
+			Messages: []platforms.ChatMessage{{
+				Role: platforms.RoleUser,
+				Content: []platforms.ChatContentPart{
+					{Type: "text", Text: "summarize these files"},
+					{Type: "image_url", ImageURL: &platforms.ChatImageURL{URL: "data:image/jpeg;base64,AA=="}},
+					{Type: "video", MediaData: &platforms.MediaData{MIMEType: "video/mp4"}},
+					{Type: "audio", MediaData: &platforms.MediaData{MIMEType: "audio/mpeg"}},
+					{Type: "audio", MediaData: &platforms.MediaData{MIMEType: "audio/ogg"}},
+				},
+			}},
+		},
+	)
+	if err == nil {
+		t.Fatal("CreateChatCompletionStream() error = nil")
+	}
+	var mediaErr *platforms.UnsupportedMediaError
+	if !errors.As(err, &mediaErr) {
+		t.Fatalf("error type = %T, want *platforms.UnsupportedMediaError", err)
+	}
+	if got := strings.Join(mediaErr.Types, ","); got != "audio,video" {
+		t.Fatalf("unsupported media types = %q, want %q", got, "audio,video")
+	}
+	if requestSent {
+		t.Fatal("HTTP request was sent for unsupported media")
+	}
+}
+
+func TestUnsupportedMediaTypesReportsUnknownParts(t *testing.T) {
+	got := unsupportedMediaTypes([]platforms.ChatMessage{{
+		Role: platforms.RoleUser,
+		Content: []platforms.ChatContentPart{
+			{Type: "text", Text: "prompt"},
+			{Type: "image_url", ImageURL: &platforms.ChatImageURL{URL: "data:image/jpeg;base64,AA=="}},
+			{Type: " "},
+		},
+	}})
+	if joined := strings.Join(got, ","); joined != "unknown" {
+		t.Fatalf("unsupportedMediaTypes() = %q, want %q", joined, "unknown")
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
