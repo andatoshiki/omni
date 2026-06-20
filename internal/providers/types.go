@@ -9,6 +9,7 @@ import (
 type ChatMessage = platforms.ChatMessage
 type ChatContentPart = platforms.ChatContentPart
 type ChatImageURL = platforms.ChatImageURL
+type MediaData = platforms.MediaData
 type ChatCompletionStreamRequest = platforms.ChatCompletionStreamRequest
 type ChatCompletionStream = platforms.ChatCompletionStream
 type TokenUsage = platforms.TokenUsage

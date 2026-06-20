@@ -12,12 +12,18 @@ type ChatMessage struct {
 	Content any    `json:"content"`
 }
 
+type MediaData struct {
+	MIMEType string
+	Data     []byte
+}
+
 // ChatContentPart is one item in an OpenAI-compatible multimodal message.
 // Text is populated for type "text" and ImageURL for type "image_url".
 type ChatContentPart struct {
-	Type     string        `json:"type"`
-	Text     string        `json:"text,omitempty"`
-	ImageURL *ChatImageURL `json:"image_url,omitempty"`
+	Type      string        `json:"type"`
+	Text      string        `json:"text,omitempty"`
+	ImageURL  *ChatImageURL `json:"image_url,omitempty"`
+	MediaData *MediaData    `json:"-"`
 }
 
 type ChatImageURL struct {

@@ -12,6 +12,7 @@ import (
 	"github.com/andatoshiki/omni/internal/providers/platforms"
 	customplatform "github.com/andatoshiki/omni/internal/providers/platforms/custom"
 	deepseekplatform "github.com/andatoshiki/omni/internal/providers/platforms/deepseek"
+	googleplatform "github.com/andatoshiki/omni/internal/providers/platforms/google"
 	openaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/openai"
 )
 
@@ -28,7 +29,7 @@ type Provider struct {
 
 // Adapter is the boundary between bot commands and provider-specific HTTP APIs.
 type Adapter interface {
-	CreateChatCompletionStream(ctx context.Context, endpoint platforms.Endpoint, request *platforms.ChatCompletionStreamRequest) (*platforms.ChatCompletionStream, error)
+	CreateChatCompletionStream(ctx context.Context, endpoint platforms.Endpoint, request *platforms.ChatCompletionStreamRequest) (platforms.ChatCompletionStream, error)
 }
 
 // Registry holds all enabled providers, keyed by provider name.
@@ -41,6 +42,7 @@ var defaultBaseURLs = map[string]string{
 	config.ProviderTypeDeepSeek: "https://api.deepseek.com",
 	config.ProviderTypeOpenAI:   "https://api.openai.com/v1",
 	config.ProviderTypeCustom:   "https://api.openai.com/v1",
+	config.ProviderTypeGoogle:   "https://generativelanguage.googleapis.com/v1beta/openai/",
 }
 
 // NewRegistry initializes the provider registry from config.
@@ -94,6 +96,8 @@ func adapterForType(providerType string, timeout *time.Duration) (Adapter, error
 		return openaiplatform.Adapter{HTTPClient: client}, nil
 	case config.ProviderTypeCustom:
 		return customplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
+	case config.ProviderTypeGoogle:
+		return googleplatform.Adapter{Timeout: timeout}, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type %q", providerType)
 	}
@@ -154,7 +158,7 @@ func (r *Registry) Resolve(id ModelID) (*Provider, error) {
 
 // CreateChatCompletionStream opens a streaming chat completion response for
 // the selected provider and model.
-func (r *Registry) CreateChatCompletionStream(ctx context.Context, id ModelID, request *ChatCompletionStreamRequest) (*ChatCompletionStream, error) {
+func (r *Registry) CreateChatCompletionStream(ctx context.Context, id ModelID, request *ChatCompletionStreamRequest) (ChatCompletionStream, error) {
 	provider, err := r.Resolve(id)
 	if err != nil {
 		return nil, err

@@ -9,18 +9,23 @@ import (
 	"strings"
 )
 
-type ChatCompletionStream struct {
+type ChatCompletionStream interface {
+	Recv() (*ChatCompletionStreamResponse, error)
+	Close() error
+}
+
+type sseStream struct {
 	response *http.Response
 	scanner  *bufio.Scanner
 }
 
-func NewChatCompletionStream(response *http.Response) *ChatCompletionStream {
+func NewChatCompletionStream(response *http.Response) ChatCompletionStream {
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	return &ChatCompletionStream{response: response, scanner: scanner}
+	return &sseStream{response: response, scanner: scanner}
 }
 
-func (s *ChatCompletionStream) Recv() (*ChatCompletionStreamResponse, error) {
+func (s *sseStream) Recv() (*ChatCompletionStreamResponse, error) {
 	for s.scanner.Scan() {
 		line := strings.TrimSpace(s.scanner.Text())
 		if line == "" || strings.HasPrefix(line, ":") {
@@ -47,7 +52,7 @@ func (s *ChatCompletionStream) Recv() (*ChatCompletionStreamResponse, error) {
 	return nil, io.EOF
 }
 
-func (s *ChatCompletionStream) Close() error {
+func (s *sseStream) Close() error {
 	if s == nil || s.response == nil || s.response.Body == nil {
 		return nil
 	}

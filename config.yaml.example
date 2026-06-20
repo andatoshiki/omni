@@ -28,20 +28,17 @@ providers:
   #       input_price: 0.15
   #       output_price: 0.60
 
-  # Any OpenAI-compatible endpoint can be added as a custom provider.
-  # Copy this block with a different unique name to add more than one.
-  - name: your-name
-    type: custom
-    enabled: false
-    api_key: ""
-    api_base: ""  # leave empty for default (https://api.openai.com/v1)
+  - name: google
+    type: google
+    enabled: true
+    api_key: "YOUR_GEMINI_API_KEY_HERE"
     models:
-      - name: gpt-4o
-        input_price: 2.50
-        output_price: 10.00
-      - name: gpt-4o-mini
-        input_price: 0.15
-        output_price: 0.60
+      - name: gemini-1.5-flash
+        input_price: 0.075
+        output_price: 0.30
+      - name: gemini-1.5-pro
+        input_price: 1.25
+        output_price: 5.00
 
 database:
   path: "omni.db"

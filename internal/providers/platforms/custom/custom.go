@@ -16,6 +16,6 @@ func (a Adapter) CreateChatCompletionStream(
 	ctx context.Context,
 	endpoint platforms.Endpoint,
 	request *platforms.ChatCompletionStreamRequest,
-) (*platforms.ChatCompletionStream, error) {
+) (platforms.ChatCompletionStream, error) {
 	return a.OpenAI.CreateChatCompletionStream(ctx, endpoint, request)
 }

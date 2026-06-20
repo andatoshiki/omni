@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -118,9 +119,23 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 	defer stream.Close()
 
 	c.app.sendChatActionTyping(ctx, msg)
-	text, usage, replyMsg, previewCapped := c.receiveChatStream(ctx, msg, modelID, stream)
+	text, usage, replyMsg, previewCapped, streamErr := c.receiveChatStream(ctx, msg, modelID, stream)
 	c.logChatCompletion(msg, modelID, requestStartedAt, text, usage, previewCapped)
-	c.sendFinalChatReply(ctx, msg, replyMsg, text)
+
+	if text != "" {
+		if streamErr != nil {
+			text += fmt.Sprintf("\n\n⚠️ _[Stream interrupted: %v]_", streamErr)
+		}
+		c.sendFinalChatReply(ctx, msg, replyMsg, text)
+	} else {
+		// If stream failed completely, clean up the loading message if it exists
+		if replyMsg != nil {
+			_, _ = c.app.deleteMessage(ctx, replyMsg)
+		}
+		if streamErr != nil {
+			_, _ = c.reply(ctx, msg, errorMessage(streamErr))
+		}
+	}
 
 	history = appendTurnToHistory(history, msg, storedUserPrompt, text, c.app.params.HistorySize)
 	c.msgHistory.Store(chatID, history)
@@ -140,8 +155,8 @@ func (c *CommandHandler) receiveChatStream(
 	ctx context.Context,
 	msg *models.Message,
 	modelID providers.ModelID,
-	stream *providers.ChatCompletionStream,
-) (text string, usage *providers.TokenUsage, replyMsg *models.Message, previewCapped bool) {
+	stream providers.ChatCompletionStream,
+) (text string, usage *providers.TokenUsage, replyMsg *models.Message, previewCapped bool, streamErr error) {
 	lastReplyEditAt := time.Now()
 	minReplyInterval := minReplyIntervalPrivateChat
 	if msg.Chat.ID < 0 {
@@ -157,6 +172,7 @@ func (c *CommandHandler) receiveChatStream(
 		if err != nil {
 			attrs := append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)
 			c.app.logger.Error("ai chat stream receive failed", attrs...)
+			streamErr = err
 			break
 		}
 		if response.Usage != nil {
@@ -181,7 +197,7 @@ func (c *CommandHandler) receiveChatStream(
 	if time.Since(lastReplyEditAt) < minReplyInterval && text != lastSentText {
 		time.Sleep(minReplyInterval - time.Since(lastReplyEditAt))
 	}
-	return text, usage, replyMsg, previewCapped
+	return text, usage, replyMsg, previewCapped, streamErr
 }
 
 func (c *CommandHandler) logChatCompletion(

@@ -18,6 +18,7 @@ const (
 	ProviderTypeDeepSeek = "deepseek"
 	ProviderTypeOpenAI   = "openai"
 	ProviderTypeCustom   = "custom"
+	ProviderTypeGoogle   = "google"
 	DefaultDatabasePath  = "omni.db"
 )
 
@@ -76,6 +77,8 @@ func (p ProviderConfig) EffectiveType() string {
 		return ProviderTypeDeepSeek
 	case ProviderTypeOpenAI:
 		return ProviderTypeOpenAI
+	case ProviderTypeGoogle:
+		return ProviderTypeGoogle
 	default:
 		return ProviderTypeCustom
 	}
@@ -236,9 +239,9 @@ func (p *Params) validate() error {
 		providerNames[providerName] = i
 
 		switch prov.EffectiveType() {
-		case ProviderTypeDeepSeek, ProviderTypeOpenAI, ProviderTypeCustom:
+		case ProviderTypeDeepSeek, ProviderTypeOpenAI, ProviderTypeCustom, ProviderTypeGoogle:
 		default:
-			return fmt.Errorf("providers[%d].type must be one of deepseek, openai, custom (provider: %s)", i, providerName)
+			return fmt.Errorf("providers[%d].type must be one of deepseek, openai, custom, google (provider: %s)", i, providerName)
 		}
 
 		if !prov.IsEnabled() {

@@ -25,7 +25,7 @@ func (a Adapter) CreateChatCompletionStream(
 	ctx context.Context,
 	endpoint platforms.Endpoint,
 	request *platforms.ChatCompletionStreamRequest,
-) (*platforms.ChatCompletionStream, error) {
+) (platforms.ChatCompletionStream, error) {
 	if endpoint.BaseURL == "" {
 		return nil, errors.New("provider base URL is not configured")
 	}
@@ -38,6 +38,29 @@ func (a Adapter) CreateChatCompletionStream(
 
 	request.Stream = true
 	request.StreamOptions.IncludeUsage = true
+
+	// Sanitize messages for OpenAI compatibility
+	for i := range request.Messages {
+		if parts, ok := request.Messages[i].Content.([]platforms.ChatContentPart); ok {
+			var sanitized []platforms.ChatContentPart
+			hasUnsupportedMedia := false
+			for _, part := range parts {
+				if part.Type == "text" || part.Type == "image_url" {
+					sanitized = append(sanitized, part)
+				} else {
+					hasUnsupportedMedia = true
+				}
+			}
+			if len(sanitized) == 0 && hasUnsupportedMedia {
+				sanitized = append(sanitized, platforms.ChatContentPart{
+					Type: "text",
+					Text: "[User attached an audio/video file that this model cannot process]",
+				})
+			}
+			request.Messages[i].Content = sanitized
+		}
+	}
+
 	body, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("encode chat completion request: %w", err)
