@@ -12,12 +12,15 @@ Private conversations work like a normal direct message. In an allowed group, us
 
 ### 1.2: Main features
 
-- **Multiple AI providers:** Configure DeepSeek, OpenAI, and multiple custom OpenAI-compatible endpoints at the same time.
+- **Multiple AI providers:** Configure DeepSeek, Google, OpenAI, and custom OpenAI-compatible endpoints at the same time.
+- **Multimodal media:** Natively process images, audio, video, and voice notes (via Google Gemini) directly from Telegram.
+- **Per-model temperature:** Override the global temperature setting independently for each model in configuration.
+- **Group media extraction:** Reply to an existing photo, audio, or video message with `@botname` in a group chat to instantly process it.
+- **Graceful degradation:** Provide safe placeholder descriptions to text-only models when media is accidentally sent to them.
 - **Per-chat model selection:** Use an inline Telegram keyboard to choose a provider and model for each chat.
-- **Streaming responses:** Receive a live preview while the model generates, followed by the complete response.
+- **Streaming responses:** Receive a live preview while the model generates, followed by the complete response with dedicated error recovery.
 - **Persistent memory:** Store bounded conversation history in SQLite and restore it after a restart.
 - **Context management:** Estimate tokens, reserve reply space, and drop the oldest history when the request approaches a model's context limit.
-- **Image prompts:** Send Telegram photos with optional captions to vision-capable models.
 - **Usage tracking:** Record prompt, completion, and total token counts per user and chat.
 - **Cost estimates:** Calculate approximate input and output costs from configured per-million-token prices.
 - **Group privacy support:** Trigger the bot with a leading `@mention` while Telegram privacy mode remains enabled.
