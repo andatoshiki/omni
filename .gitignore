@@ -1,0 +1,7 @@
+/config.yaml
+/omni
+/bot_memory.db
+/omni.db
+/data/*.db
+/data/*.db-*
+/memory_export.json

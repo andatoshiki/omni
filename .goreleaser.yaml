@@ -1,0 +1,58 @@
+version: 2
+
+project_name: omni
+
+before:
+  hooks:
+    - go mod tidy
+
+git:
+  ignore_tags:
+    - "{{ if not .IsNightly }}*-rc*{{ end }}"
+
+builds:
+  - id: omni
+    binary: omni
+    env:
+      - CGO_ENABLED=0
+    tags:
+      - netgo
+      - osusergo
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: omni
+    name_template: >-
+      omni-
+      {{- if eq .Os "darwin" }}darwin{{- else if eq .Os "linux" }}linux{{- else if eq .Os "windows" }}windows{{- else if eq .Os "freebsd" }}freebsd{{- else if eq .Os "openbsd" }}openbsd{{- else if eq .Os "netbsd" }}netbsd{{- else if eq .Os "dragonfly" }}dragonfly{{- else }}{{ .Os }}{{ end }}-
+      {{- if eq .Arch "amd64" }}x86-64{{- else if eq .Arch "386" }}i386{{- else if eq .Arch "arm64" }}aarch64{{- else if eq .Arch "arm" }}armv{{ .Arm }}{{- else if eq .Arch "mips" }}mips{{- if .Mips }}-{{ .Mips }}{{ end }}{{- else if eq .Arch "mipsle" }}mipsle{{- if .Mips }}-{{ .Mips }}{{ end }}{{- else if eq .Arch "mips64" }}mips64{{- if .Mips }}-{{ .Mips }}{{ end }}{{- else if eq .Arch "mips64le" }}mips64le{{- if .Mips }}-{{ .Mips }}{{ end }}{{- else if eq .Arch "ppc64" }}ppc64{{- else if eq .Arch "ppc64le" }}ppc64le{{- else if eq .Arch "riscv64" }}riscv64{{- else if eq .Arch "s390x" }}s390x{{- else }}{{ .Arch }}{{ end }}-
+      {{- .Tag }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - readme.md
+      - license
+      - config.yaml.example
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  format: "[`{{ .SHA }}`](https://github.com/andatoshiki/omni/commit/{{ .SHA }}): {{ .Message }}"
+  abbrev: 7
+
+release:
+  prerelease: auto
+  header: |
+    # {{ .Tag }} Changes

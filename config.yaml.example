@@ -1,0 +1,63 @@
+providers:
+  - name: deepseek
+    type: deepseek
+    enabled: true
+    api_key: ""
+    api_base: ""  # leave empty for default (https://api.deepseek.com)
+    timeout: 30s  # optional timeout for API requests (e.g., 30s, 1m)
+    models:
+      - name: deepseek-chat
+        max_context_tokens: 65536  # optional; overrides chat.max_context_tokens
+        input_price: 0.27   # USD per 1M input tokens
+        output_price: 1.10  # USD per 1M output tokens
+      - name: deepseek-reasoner
+        input_price: 0.55
+        output_price: 2.19
+
+  # Uncomment to add OpenAI support:
+  # - name: openai
+  #   type: openai
+  #   enabled: true
+  #   api_key: ""
+  #   api_base: ""  # leave empty for default (https://api.openai.com/v1)
+  #   models:
+  #     - name: gpt-4o
+  #       input_price: 2.50
+  #       output_price: 10.00
+  #     - name: gpt-4o-mini
+  #       input_price: 0.15
+  #       output_price: 0.60
+
+  # Any OpenAI-compatible endpoint can be added as a custom provider.
+  # Copy this block with a different unique name to add more than one.
+  - name: your-name
+    type: custom
+    enabled: false
+    api_key: ""
+    api_base: ""  # leave empty for default (https://api.openai.com/v1)
+    models:
+      - name: gpt-4o
+        input_price: 2.50
+        output_price: 10.00
+      - name: gpt-4o-mini
+        input_price: 0.15
+        output_price: 0.60
+
+database:
+  path: "omni.db"
+
+chat:
+  initial_prompt: >-
+    You are a helpful assistant. Use Telegram-compatible Markdown when
+    formatting improves readability. Do not use LaTeX formatting.
+  temperature: 1.3
+  max_reply_tokens: 2048
+  max_context_tokens: 8192
+  history_size: 4
+
+telegram:
+  bot_token: ""
+  allowed_user_ids: []
+  admin_user_ids: []
+  # Use numeric chat IDs (usually negative, such as -1001234567890).
+  allowed_group_ids: []
