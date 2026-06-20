@@ -17,7 +17,12 @@ const minReplyIntervalGroupChat = 3 * time.Second
 
 // Chat handles one AI conversation turn. Turns for the same Telegram chat are
 // serialized so their persisted histories cannot interleave.
-func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
+func (c *CommandHandler) Chat(ctx context.Context, msgs ...*models.Message) {
+	if len(msgs) == 0 {
+		return
+	}
+	msg := msgs[0]
+
 	requestStartedAt := time.Now()
 	chatID := msg.Chat.ID
 	unlock := c.lockChat(chatID)
@@ -28,14 +33,26 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 		userID = msg.From.ID
 	}
 
+	modelID, request, history, storedUserPrompt, err := c.prepareChatContext(ctx, chatID, msgs...)
+	if err != nil {
+		// Error logging and replying is handled inside prepareChatContext to maintain context
+		return
+	}
+
+	text, usage, streamErr := c.executeChatStream(ctx, msg, modelID, request, requestStartedAt)
+
+	c.finalizeChatTurn(chatID, userID, msg, history, storedUserPrompt, text, usage, streamErr)
+}
+
+func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, msgs ...*models.Message) (providers.ModelID, *providers.ChatCompletionStreamRequest, []providers.ChatMessage, string, error) {
+	msg := msgs[0]
 	var history []providers.ChatMessage
 	if stored, exists := c.msgHistory.Load(chatID); exists {
 		history = stored.([]providers.ChatMessage)
 	} else {
 		loaded, err := c.app.store.LoadConversation(chatID)
 		if err != nil {
-			attrs := append(c.app.messageLogAttrs(msg), "error", err)
-			c.app.logger.Warn("failed to load conversation from database", attrs...)
+			c.app.logger.Warn("failed to load conversation from database", append(c.app.messageLogAttrs(msg), "error", err)...)
 		} else {
 			history = loaded
 			c.msgHistory.Store(chatID, history)
@@ -44,17 +61,16 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 
 	modelID := c.currentModel(chatID)
 	if _, err := c.app.providers.Resolve(modelID); err != nil {
-		attrs := append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)
-		c.app.logger.Error("failed to resolve ai provider", attrs...)
+		c.app.logger.Error("failed to resolve ai provider", append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)...)
 		_, _ = c.reply(ctx, msg, errorMessage(err))
-		return
+		return modelID, nil, nil, "", err
 	}
-	userMessage, storedUserPrompt, err := c.userMessage(ctx, msg)
+
+	userMessage, storedUserPrompt, err := c.userMessage(ctx, msgs...)
 	if err != nil {
-		attrs := append(c.app.messageLogAttrs(msg), "error", err)
-		c.app.logger.Error("failed to prepare user message", attrs...)
+		c.app.logger.Error("failed to prepare user message", append(c.app.messageLogAttrs(msg), "error", err)...)
 		_, _ = c.reply(ctx, msg, errorMessage(err))
-		return
+		return modelID, nil, nil, "", err
 	}
 
 	currentMessages := make([]providers.ChatMessage, 0, 2)
@@ -65,6 +81,7 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 		})
 	}
 	currentMessages = append(currentMessages, userMessage)
+	
 	maxContextTokens := c.app.params.MaxContextTokens
 	if model := c.app.providers.LookupModelConfig(modelID); model != nil && model.MaxContextTokens > 0 {
 		maxContextTokens = model.MaxContextTokens
@@ -83,10 +100,9 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 		c.app.params.MaxReplyTokens,
 	)
 	if err != nil {
-		attrs := append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)
-		c.app.logger.Error("failed to build ai context window", attrs...)
+		c.app.logger.Error("failed to build ai context window", append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)...)
 		_, _ = c.reply(ctx, msg, errorMessage(err))
-		return
+		return modelID, nil, nil, "", err
 	}
 
 	request := &providers.ChatCompletionStreamRequest{
@@ -96,8 +112,7 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 		Messages:    requestMessages,
 	}
 
-	modelConfig := c.app.providers.LookupModelConfig(modelID)
-	if modelConfig != nil && modelConfig.Temperature != nil {
+	if modelConfig := c.app.providers.LookupModelConfig(modelID); modelConfig != nil && modelConfig.Temperature != nil {
 		request.Temperature = *modelConfig.Temperature
 	}
 
@@ -115,12 +130,21 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 		)...,
 	)
 
+	return modelID, request, history, storedUserPrompt, nil
+}
+
+func (c *CommandHandler) executeChatStream(
+	ctx context.Context, 
+	msg *models.Message, 
+	modelID providers.ModelID, 
+	request *providers.ChatCompletionStreamRequest, 
+	requestStartedAt time.Time,
+) (string, *providers.TokenUsage, error) {
 	stream, err := c.app.providers.CreateChatCompletionStream(ctx, modelID, request)
 	if err != nil {
-		attrs := append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)
-		c.app.logger.Error("failed to create ai chat stream", attrs...)
+		c.app.logger.Error("failed to create ai chat stream", append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)...)
 		_, _ = c.reply(ctx, msg, errorMessage(err))
-		return
+		return "", nil, err
 	}
 	defer stream.Close()
 
@@ -134,7 +158,6 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 		}
 		c.sendFinalChatReply(ctx, msg, replyMsg, text)
 	} else {
-		// If stream failed completely, clean up the loading message if it exists
 		if replyMsg != nil {
 			_, _ = c.app.deleteMessage(ctx, replyMsg)
 		}
@@ -143,16 +166,33 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 		}
 	}
 
+	return text, usage, streamErr
+}
+
+func (c *CommandHandler) finalizeChatTurn(
+	chatID int64, 
+	userID int64, 
+	msg *models.Message, 
+	history []providers.ChatMessage, 
+	storedUserPrompt string, 
+	text string, 
+	usage *providers.TokenUsage, 
+	streamErr error,
+) {
+	if text == "" && streamErr != nil {
+		return // Do not save history if it completely failed
+	}
+
 	history = appendTurnToHistory(history, msg, storedUserPrompt, text, c.app.params.HistorySize)
 	c.msgHistory.Store(chatID, history)
+	
 	if err := c.app.store.SaveConversation(chatID, history); err != nil {
-		attrs := append(c.app.messageLogAttrs(msg), "history_messages", len(history), "error", err)
-		c.app.logger.Warn("failed to save conversation to database", attrs...)
+		c.app.logger.Warn("failed to save conversation to database", append(c.app.messageLogAttrs(msg), "history_messages", len(history), "error", err)...)
 	}
+	
 	if usage != nil {
 		if err := c.app.store.SaveTokenUsage(chatID, userID, *usage); err != nil {
-			attrs := append(c.app.messageLogAttrs(msg), "error", err)
-			c.app.logger.Warn("failed to save token usage", attrs...)
+			c.app.logger.Warn("failed to save token usage", append(c.app.messageLogAttrs(msg), "error", err)...)
 		}
 	}
 }

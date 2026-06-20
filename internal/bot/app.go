@@ -27,9 +27,10 @@ type App struct {
 	params      *config.Params
 	store       *storage.Database
 	providers   *providers.Registry
-	logger      *slog.Logger
-	commands    *CommandHandler
-	botUsername string
+	logger          *slog.Logger
+	commands        *CommandHandler
+	mediaAggregator *Aggregator
+	botUsername     string
 }
 
 func New(
@@ -70,6 +71,7 @@ func New(
 	}
 	app.client = client
 	app.commands = NewCommandHandler(app)
+	app.mediaAggregator = NewAggregator(app)
 	return app, nil
 }
 

@@ -19,130 +19,150 @@ const maxTelegramImageBytes = 20 << 20
 
 var telegramFileHTTPClient = &http.Client{Timeout: time.Minute}
 
-func (c *CommandHandler) userMessage(ctx context.Context, msg *models.Message) (providers.ChatMessage, string, error) {
-	prompt := msg.Text
-	if msg.Caption != "" {
-		prompt = msg.Caption
+func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Message) (providers.ChatMessage, string, error) {
+	if len(msgs) == 0 {
+		return providers.ChatMessage{}, "", fmt.Errorf("no messages to process")
 	}
 
-	mediaMsg := msg
-	if len(mediaMsg.Photo) == 0 && mediaMsg.Voice == nil && mediaMsg.Audio == nil && mediaMsg.Video == nil && mediaMsg.VideoNote == nil {
-		if msg.ReplyToMessage != nil {
-			mediaMsg = msg.ReplyToMessage
+	prompt := msgs[0].Text
+	for _, m := range msgs {
+		if m.Caption != "" {
+			prompt = m.Caption
+			break
 		}
 	}
 
-	if len(mediaMsg.Photo) > 0 {
-		photo, ok := largestPhoto(mediaMsg.Photo)
-		if !ok {
-			return providers.ChatMessage{}, "", fmt.Errorf("Telegram photo has no downloadable size")
+	var parts []providers.ChatContentPart
+	var storedSummary string
+	mediaCount := 0
+
+	for _, msg := range msgs {
+		mediaMsg := msg
+		if len(mediaMsg.Photo) == 0 && mediaMsg.Voice == nil && mediaMsg.Audio == nil && mediaMsg.Video == nil && mediaMsg.VideoNote == nil {
+			if msg.ReplyToMessage != nil {
+				mediaMsg = msg.ReplyToMessage
+			}
 		}
-		data, mediaType, err := c.downloadFile(ctx, photo.FileID)
-		if err != nil {
-			return providers.ChatMessage{}, "", err
+
+		if len(mediaMsg.Photo) > 0 {
+			if photo, ok := largestPhoto(mediaMsg.Photo); ok {
+				part, err := c.processMediaItem(ctx, photo.FileID, "", "image")
+				if err != nil {
+					return providers.ChatMessage{}, "", err
+				}
+				parts = append(parts, part)
+				mediaCount++
+				storedSummary = updateStoredSummary(storedSummary, "image")
+			}
+			continue
 		}
-		if !strings.HasPrefix(mediaType, "image/") {
-			return providers.ChatMessage{}, "", fmt.Errorf("downloaded photo has unsupported media type %q", mediaType)
+
+		if mediaMsg.Voice != nil {
+			if mediaMsg.Voice.FileSize > maxTelegramImageBytes {
+				return providers.ChatMessage{}, "", fmt.Errorf("voice note exceeds 20 MB limit")
+			}
+			part, err := c.processMediaItem(ctx, mediaMsg.Voice.FileID, "audio/ogg", "audio")
+			if err != nil {
+				return providers.ChatMessage{}, "", err
+			}
+			parts = append(parts, part)
+			mediaCount++
+			storedSummary = updateStoredSummary(storedSummary, "voice note")
+			continue
 		}
-		return imageUserMessage(prompt, mediaType, data)
+
+		if mediaMsg.Audio != nil {
+			if mediaMsg.Audio.FileSize > maxTelegramImageBytes {
+				return providers.ChatMessage{}, "", fmt.Errorf("audio file exceeds 20 MB limit")
+			}
+			part, err := c.processMediaItem(ctx, mediaMsg.Audio.FileID, "audio/mpeg", "audio")
+			if err != nil {
+				return providers.ChatMessage{}, "", err
+			}
+			parts = append(parts, part)
+			mediaCount++
+			storedSummary = updateStoredSummary(storedSummary, "audio file")
+			continue
+		}
+
+		if mediaMsg.Video != nil {
+			if mediaMsg.Video.FileSize > maxTelegramImageBytes {
+				return providers.ChatMessage{}, "", fmt.Errorf("video exceeds 20 MB limit")
+			}
+			part, err := c.processMediaItem(ctx, mediaMsg.Video.FileID, "video/mp4", "video")
+			if err != nil {
+				return providers.ChatMessage{}, "", err
+			}
+			parts = append(parts, part)
+			mediaCount++
+			storedSummary = updateStoredSummary(storedSummary, "video")
+			continue
+		}
+
+		if mediaMsg.VideoNote != nil {
+			if mediaMsg.VideoNote.FileSize > maxTelegramImageBytes {
+				return providers.ChatMessage{}, "", fmt.Errorf("video note exceeds 20 MB limit")
+			}
+			part, err := c.processMediaItem(ctx, mediaMsg.VideoNote.FileID, "video/mp4", "video")
+			if err != nil {
+				return providers.ChatMessage{}, "", err
+			}
+			parts = append(parts, part)
+			mediaCount++
+			storedSummary = updateStoredSummary(storedSummary, "video note")
+			continue
+		}
 	}
 
-	if mediaMsg.Voice != nil {
-		if mediaMsg.Voice.FileSize > maxTelegramImageBytes {
-			return providers.ChatMessage{}, "", fmt.Errorf("this voice note is %d MB. The Telegram Bot API only allows bots to process files up to 20 MB", mediaMsg.Voice.FileSize/1024/1024)
-		}
-		data, _, err := c.downloadFile(ctx, mediaMsg.Voice.FileID)
-		if err != nil {
-			return providers.ChatMessage{}, "", err
-		}
-		return mediaUserMessage(prompt, "audio/ogg", data, "voice note", "Transcribe and summarize this voice note.")
+	if mediaCount == 0 {
+		return providers.ChatMessage{Role: providers.RoleUser, Content: prompt}, prompt, nil
 	}
 
-	if mediaMsg.Audio != nil {
-		if mediaMsg.Audio.FileSize > maxTelegramImageBytes {
-			return providers.ChatMessage{}, "", fmt.Errorf("this audio file is %d MB. The Telegram Bot API only allows bots to process files up to 20 MB", mediaMsg.Audio.FileSize/1024/1024)
-		}
-		data, mime, err := c.downloadFile(ctx, mediaMsg.Audio.FileID)
-		if err != nil {
-			return providers.ChatMessage{}, "", err
-		}
-		if mime == "application/octet-stream" || mime == "" {
-			mime = "audio/mpeg" // fallback
-		}
-		return mediaUserMessage(prompt, mime, data, "audio file", "Transcribe and summarize this audio.")
+	caption := strings.TrimSpace(prompt)
+	if caption != "" {
+		storedSummary += " " + caption
+	} else {
+		prompt = "What is in this media?"
 	}
 
-	if mediaMsg.Video != nil {
-		if mediaMsg.Video.FileSize > maxTelegramImageBytes {
-			return providers.ChatMessage{}, "", fmt.Errorf("this video is %d MB. The Telegram Bot API only allows bots to process files up to 20 MB", mediaMsg.Video.FileSize/1024/1024)
-		}
-		data, mime, err := c.downloadFile(ctx, mediaMsg.Video.FileID)
-		if err != nil {
-			return providers.ChatMessage{}, "", err
-		}
-		if mime == "application/octet-stream" || mime == "" {
-			mime = "video/mp4" // fallback
-		}
-		return mediaUserMessage(prompt, mime, data, "video", "Describe what is happening in this video.")
-	}
+	finalParts := []providers.ChatContentPart{{Type: "text", Text: prompt}}
+	finalParts = append(finalParts, parts...)
 
-	if mediaMsg.VideoNote != nil {
-		if mediaMsg.VideoNote.FileSize > maxTelegramImageBytes {
-			return providers.ChatMessage{}, "", fmt.Errorf("this video note is %d MB. The Telegram Bot API only allows bots to process files up to 20 MB", mediaMsg.VideoNote.FileSize/1024/1024)
-		}
-		data, mime, err := c.downloadFile(ctx, mediaMsg.VideoNote.FileID)
-		if err != nil {
-			return providers.ChatMessage{}, "", err
-		}
-		if mime == "application/octet-stream" || mime == "" {
-			mime = "video/mp4" // fallback
-		}
-		return mediaUserMessage(prompt, mime, data, "video note", "Describe what the person in this video note is saying and doing.")
-	}
-
-	return providers.ChatMessage{Role: providers.RoleUser, Content: prompt}, prompt, nil
+	return providers.ChatMessage{Role: providers.RoleUser, Content: finalParts}, storedSummary, nil
 }
 
-func mediaUserMessage(prompt, mediaType string, data []byte, mediaName, defaultPrompt string) (providers.ChatMessage, string, error) {
-	caption := strings.TrimSpace(prompt)
-	stored := fmt.Sprintf("[User attached a %s]", mediaName)
-	if caption != "" {
-		stored += " " + caption
-	} else {
-		prompt = defaultPrompt
+func updateStoredSummary(current, mediaType string) string {
+	if current == "" {
+		return fmt.Sprintf("[User attached a %s]", mediaType)
 	}
-
-	mediaTypePrefix := strings.SplitN(mediaType, "/", 2)[0]
-
-	parts := []providers.ChatContentPart{
-		{Type: "text", Text: prompt},
-		{
-			Type:      mediaTypePrefix, // "audio" or "video"
-			MediaData: &providers.MediaData{MIMEType: mediaType, Data: data},
-		},
-	}
-	return providers.ChatMessage{Role: providers.RoleUser, Content: parts}, stored, nil
+	return "[User attached multiple media files]"
 }
 
-func imageUserMessage(prompt, mediaType string, image []byte) (providers.ChatMessage, string, error) {
-	caption := strings.TrimSpace(prompt)
-	stored := "[User attached an image]"
-	if caption != "" {
-		stored += " " + caption
-	} else {
-		prompt = "What is in this image?"
+func (c *CommandHandler) processMediaItem(ctx context.Context, fileID string, fallbackMime string, typePrefix string) (providers.ChatContentPart, error) {
+	data, mime, err := c.downloadFile(ctx, fileID)
+	if err != nil {
+		return providers.ChatContentPart{}, err
 	}
-
-	parts := []providers.ChatContentPart{
-		{Type: "text", Text: prompt},
-		{
+	if mime == "application/octet-stream" || mime == "" {
+		mime = fallbackMime
+	}
+	
+	if typePrefix == "image" {
+		if !strings.HasPrefix(mime, "image/") {
+			return providers.ChatContentPart{}, fmt.Errorf("downloaded photo has unsupported media type %q", mime)
+		}
+		return providers.ChatContentPart{
 			Type: "image_url",
 			ImageURL: &providers.ChatImageURL{
-				URL: "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(image),
+				URL: "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data),
 			},
-		},
+		}, nil
 	}
-	return providers.ChatMessage{Role: providers.RoleUser, Content: parts}, stored, nil
+
+	return providers.ChatContentPart{
+		Type:      typePrefix,
+		MediaData: &providers.MediaData{MIMEType: mime, Data: data},
+	}, nil
 }
 
 func (c *CommandHandler) downloadFile(ctx context.Context, fileID string) ([]byte, string, error) {

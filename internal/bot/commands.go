@@ -12,16 +12,44 @@ import (
 	"github.com/andatoshiki/omni/internal/providers"
 )
 
+type CommandHandlerFunc func(ctx context.Context, msg *models.Message)
+
+type Route struct {
+	Handler     CommandHandlerFunc
+	Description string
+	Hidden      bool // True if we shouldn't show it in the Telegram menu
+}
+
 type CommandHandler struct {
 	app        *App
 	msgHistory sync.Map
 	chatLocks  sync.Map
+	routes     map[string]Route
 }
 
 func NewCommandHandler(app *App) *CommandHandler {
-	return &CommandHandler{
-		app: app,
+	c := &CommandHandler{
+		app:    app,
+		routes: make(map[string]Route),
 	}
+
+	c.routes["ping"] = Route{Handler: c.Ping, Description: "Check bot latency"}
+	c.routes["model"] = Route{Handler: c.Model, Description: "Select AI model"}
+	c.routes["clear"] = Route{Handler: c.Clear, Description: "Clear conversation history"}
+	c.routes["usage"] = Route{Handler: c.Usage, Description: "Show token usage"}
+	c.routes["dsusage"] = Route{Handler: c.Usage, Hidden: true}
+	c.routes["setprompt"] = Route{Handler: c.SetPrompt, Description: "Set a custom system prompt"}
+	c.routes["clearprompt"] = Route{Handler: c.ClearPrompt, Description: "Clear the custom prompt"}
+	c.routes["export"] = Route{Handler: c.Export, Description: "Export conversation data"}
+	c.routes["help"] = Route{Handler: c.Help, Description: "Show help message"}
+	c.routes["dshelp"] = Route{Handler: c.Help, Hidden: true}
+	c.routes["dsclear"] = Route{Handler: c.Clear, Hidden: true}
+	c.routes["dsexport"] = Route{Handler: c.Export, Hidden: true}
+	c.routes["dssetprompt"] = Route{Handler: c.SetPrompt, Hidden: true}
+	c.routes["dsclearprompt"] = Route{Handler: c.ClearPrompt, Hidden: true}
+	c.routes["start"] = Route{Handler: c.Start, Hidden: true}
+
+	return c
 }
 
 func (c *CommandHandler) lockChat(chatID int64) func() {
@@ -151,17 +179,39 @@ func (c *CommandHandler) Model(ctx context.Context, msg *models.Message) {
 	}
 }
 
-func (c *CommandHandler) Help(ctx context.Context, msg *models.Message, cmdChar string) {
+func (c *CommandHandler) Help(ctx context.Context, msg *models.Message) {
 	_, _ = c.app.sendReplyToMessage(ctx, msg, "🤖 AI Telegram Bot\n\n"+
 		"Available commands:\n\n"+
-		cmdChar+"model - select AI model\n"+
-		cmdChar+"ping - check bot latency\n"+
-		cmdChar+"clear - clear conversation history\n"+
-		cmdChar+"usage - show your token usage in this chat\n"+
-		cmdChar+"setprompt - set a custom system prompt\n"+
-		cmdChar+"clearprompt - clear the custom prompt\n"+
-		cmdChar+"help - show this help\n"+
-		cmdChar+"export - export all memories")
+		"/model - select AI model\n"+
+		"/ping - check bot latency\n"+
+		"/clear - clear conversation history\n"+
+		"/usage - show your token usage in this chat\n"+
+		"/setprompt - set a custom system prompt\n"+
+		"/clearprompt - clear the custom prompt\n"+
+		"/help - show this help\n"+
+		"/export - export all memories")
+}
+
+func (c *CommandHandler) Clear(ctx context.Context, msg *models.Message) {
+	if err := c.ClearConversation(msg.Chat.ID); err != nil {
+		_, _ = c.reply(ctx, msg, errorMessage(err))
+		return
+	}
+	_, _ = c.reply(ctx, msg, "✅ Conversation history cleared")
+}
+
+func (c *CommandHandler) Export(ctx context.Context, msg *models.Message) {
+	if err := c.app.store.ExportMemory("memory_export.json"); err != nil {
+		_, _ = c.reply(ctx, msg, errorMessage(err))
+		return
+	}
+	_, _ = c.reply(ctx, msg, "✅ Memory exported to memory_export.json")
+}
+
+func (c *CommandHandler) Start(ctx context.Context, msg *models.Message) {
+	if msg.Chat.ID >= 0 {
+		_, _ = c.app.sendReplyToMessage(ctx, msg, "🤖 Welcome! Send me a message or use /help to see available commands.")
+	}
 }
 
 func (c *CommandHandler) SetPrompt(ctx context.Context, msg *models.Message) {

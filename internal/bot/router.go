@@ -26,10 +26,30 @@ func (a *App) handleMessage(ctx context.Context, update *models.Update) {
 		return
 	}
 
-	commandText := msg.Text
-	if commandText == "" && (len(msg.Photo) > 0 || msg.Voice != nil || msg.Audio != nil || msg.Video != nil || msg.VideoNote != nil) {
-		commandText = msg.Caption
+	if msg.MediaGroupID != "" {
+		a.mediaAggregator.Add(ctx, msg)
+		return
 	}
+
+	a.processMessages(ctx, msg)
+}
+
+func (a *App) processMessages(ctx context.Context, msgs ...*models.Message) {
+	if len(msgs) == 0 {
+		return
+	}
+	msg := msgs[0]
+
+	commandText := msg.Text
+	if commandText == "" {
+		for _, m := range msgs {
+			if m.Caption != "" {
+				commandText = m.Caption
+				break
+			}
+		}
+	}
+
 	if commandText != "" && (commandText[0] == '/' || commandText[0] == '!') {
 		msg.Text = commandText
 		a.routeCommand(ctx, msg)
@@ -37,15 +57,13 @@ func (a *App) handleMessage(ctx context.Context, update *models.Update) {
 	}
 	if prompt, mentioned := stripBotMention(commandText, a.botUsername); mentioned {
 		msg.Text = prompt
-		if len(msg.Photo) > 0 || msg.Voice != nil || msg.Audio != nil || msg.Video != nil || msg.VideoNote != nil {
-			msg.Caption = prompt
-		}
-		a.commands.Chat(ctx, msg)
+		msg.Caption = prompt
+		a.commands.Chat(ctx, msgs...)
 		return
 	}
 
 	if msg.Chat.ID >= 0 || replyTargetsBot(msg, a.client.ID()) {
-		a.commands.Chat(ctx, msg)
+		a.commands.Chat(ctx, msgs...)
 	}
 }
 
@@ -91,52 +109,15 @@ func (a *App) routeCommand(ctx context.Context, msg *models.Message) {
 	}
 	attrs := append(a.messageLogAttrs(msg), "command", command, "command_prefix", prefix)
 
-	route := func(handler string) {
-		a.logger.Info("telegram command routed", append(attrs, "handler", handler)...)
+	if route, exists := a.commands.routes[command]; exists {
+		a.logger.Info("telegram command routed", append(attrs, "handler", command)...)
+		route.Handler(ctx, msg)
+		return
 	}
-	switch command {
-	case "ping":
-		route("ping")
-		a.commands.Ping(ctx, msg)
-	case "model":
-		route("model")
-		a.commands.Model(ctx, msg)
-	case "usage", "dsusage":
-		route("usage")
-		a.commands.Usage(ctx, msg)
-	case "help", "dshelp":
-		route("help")
-		a.commands.Help(ctx, msg, prefix)
-	case "clear", "dsclear":
-		route("clear")
-		if err := a.commands.ClearConversation(msg.Chat.ID); err != nil {
-			_, _ = a.commands.reply(ctx, msg, errorMessage(err))
-			return
-		}
-		_, _ = a.commands.reply(ctx, msg, "✅ Conversation history cleared")
-	case "export", "dsexport":
-		route("export")
-		if err := a.store.ExportMemory("memory_export.json"); err != nil {
-			_, _ = a.commands.reply(ctx, msg, errorMessage(err))
-			return
-		}
-		_, _ = a.commands.reply(ctx, msg, "✅ Memory exported to memory_export.json")
-	case "setprompt", "dssetprompt":
-		route("setprompt")
-		a.commands.SetPrompt(ctx, msg)
-	case "clearprompt", "dsclearprompt":
-		route("clearprompt")
-		a.commands.ClearPrompt(ctx, msg)
-	case "start":
-		route("start")
-		if msg.Chat.ID >= 0 {
-			_, _ = a.sendReplyToMessage(ctx, msg, "🤖 Welcome! Send me a message or use /help to see available commands.")
-		}
-	default:
-		a.logger.Warn("telegram command ignored: invalid command", attrs...)
-		if msg.Chat.ID >= 0 {
-			_, _ = a.sendReplyToMessage(ctx, msg, errorMessage(errors.New("invalid command")))
-		}
+
+	a.logger.Warn("telegram command ignored: invalid command", attrs...)
+	if msg.Chat.ID >= 0 {
+		_, _ = a.sendReplyToMessage(ctx, msg, errorMessage(errors.New("invalid command")))
 	}
 }
 
@@ -149,16 +130,20 @@ func (a *App) updateHandler(ctx context.Context, _ *telegram.Bot, update *models
 }
 
 func (a *App) registerCommands(ctx context.Context) {
-	commands := []models.BotCommand{
-		{Command: "ping", Description: "Check bot latency"},
-		{Command: "model", Description: "Select AI model"},
-		{Command: "clear", Description: "Clear conversation history"},
-		{Command: "usage", Description: "Show token usage"},
-		{Command: "setprompt", Description: "Set a custom system prompt"},
-		{Command: "clearprompt", Description: "Clear the custom prompt"},
-		{Command: "export", Description: "Export conversation data"},
-		{Command: "help", Description: "Show help message"},
+	var commands []models.BotCommand
+	for cmd, route := range a.commands.routes {
+		if !route.Hidden {
+			commands = append(commands, models.BotCommand{
+				Command:     cmd,
+				Description: route.Description,
+			})
+		}
 	}
+	// Sort to keep the menu predictable
+	slices.SortFunc(commands, func(a, b models.BotCommand) int {
+		return strings.Compare(a.Command, b.Command)
+	})
+
 	_, err := a.client.SetMyCommands(ctx, &telegram.SetMyCommandsParams{Commands: commands})
 	if err != nil {
 		a.logger.Warn("failed to register bot commands", "error", err)
