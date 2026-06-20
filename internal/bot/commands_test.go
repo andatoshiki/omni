@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -24,5 +25,37 @@ func TestPingReplyTextClampsInvalidLatency(t *testing.T) {
 	got := pingReplyText(msg, messageTime.Add(-time.Second))
 	if got != "Pong! 0ms" {
 		t.Fatalf("pingReplyText() = %q, want %q", got, "Pong! 0ms")
+	}
+}
+
+func TestCanExport(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  *models.Message
+		want bool
+	}{
+		{name: "allowed user", msg: &models.Message{From: &models.User{ID: 101}}, want: true},
+		{name: "administrator", msg: &models.Message{From: &models.User{ID: 202}}, want: true},
+		{name: "group-only user", msg: &models.Message{From: &models.User{ID: 303}}, want: false},
+		{name: "missing sender", msg: &models.Message{}, want: false},
+		{name: "missing message", msg: nil, want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := canExport(test.msg, []int64{101}, []int64{202})
+			if got != test.want {
+				t.Fatalf("canExport() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestCommandRoutesHaveNoDeepSeekAliases(t *testing.T) {
+	handler := NewCommandHandler(nil)
+	for command := range handler.routes {
+		if strings.HasPrefix(command, "ds") {
+			t.Fatalf("legacy DeepSeek command alias remains registered: %q", command)
+		}
 	}
 }

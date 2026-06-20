@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -41,16 +42,10 @@ func NewCommandHandler(app *App) *CommandHandler {
 	c.routes["model"] = Route{Handler: c.Model, Description: "Select AI model"}
 	c.routes["clear"] = Route{Handler: c.Clear, Description: "Clear conversation history"}
 	c.routes["usage"] = Route{Handler: c.Usage, Description: "Show token usage"}
-	c.routes["dsusage"] = Route{Handler: c.Usage, Hidden: true}
 	c.routes["setprompt"] = Route{Handler: c.SetPrompt, Description: "Set a custom system prompt"}
 	c.routes["clearprompt"] = Route{Handler: c.ClearPrompt, Description: "Clear the custom prompt"}
 	c.routes["export"] = Route{Handler: c.Export, Description: "Export conversation data"}
 	c.routes["help"] = Route{Handler: c.Help, Description: "Show help message"}
-	c.routes["dshelp"] = Route{Handler: c.Help, Hidden: true}
-	c.routes["dsclear"] = Route{Handler: c.Clear, Hidden: true}
-	c.routes["dsexport"] = Route{Handler: c.Export, Hidden: true}
-	c.routes["dssetprompt"] = Route{Handler: c.SetPrompt, Hidden: true}
-	c.routes["dsclearprompt"] = Route{Handler: c.ClearPrompt, Hidden: true}
 	c.routes["start"] = Route{Handler: c.Start, Hidden: true}
 
 	return c
@@ -211,6 +206,12 @@ func (c *CommandHandler) Clear(ctx context.Context, msg *models.Message) {
 }
 
 func (c *CommandHandler) Export(ctx context.Context, msg *models.Message) {
+	if !canExport(msg, c.app.params.AllowedUserIDs, c.app.params.AdminUserIDs) {
+		c.app.logger.Warn("memory export denied", c.app.messageLogAttrs(msg)...)
+		_, _ = c.reply(ctx, msg, "❌ You are not authorized to export conversation data")
+		return
+	}
+
 	filename := time.Now().Format("2006-01-02-15-04-05") + "-memory-export.json"
 	if err := c.app.store.ExportMemory(filename); err != nil {
 		_, _ = c.reply(ctx, msg, errorMessage(err))
@@ -236,6 +237,13 @@ func (c *CommandHandler) Export(ctx context.Context, msg *models.Message) {
 	if err != nil {
 		c.app.logger.Error("failed to send export document", "error", err)
 	}
+}
+
+func canExport(msg *models.Message, allowedUserIDs, adminUserIDs []int64) bool {
+	if msg == nil || msg.From == nil {
+		return false
+	}
+	return slices.Contains(allowedUserIDs, msg.From.ID) || slices.Contains(adminUserIDs, msg.From.ID)
 }
 
 func (c *CommandHandler) Start(ctx context.Context, msg *models.Message) {
