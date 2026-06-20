@@ -6,17 +6,17 @@
 
 ### 1.1: What Omni does
 
-Omni connects a Telegram bot to DeepSeek, OpenAI, or another OpenAI-compatible chat completion API. It keeps each Telegram chat isolated, remembers recent conversation history, streams model output back into Telegram, and stores operational state in a local SQLite database.
+Omni connects a Telegram bot to Anthropic, DeepSeek, Google, OpenAI, or another OpenAI-compatible chat completion API. It keeps each Telegram chat isolated, remembers recent conversation history, streams model output back into Telegram, and stores operational state in a local SQLite database.
 
 Private conversations work like a normal direct message. In an allowed group, users start a message with the bot's username, such as `@your_bot_username Explain this code`, or reply to one of the bot's messages. Omni removes its own username before sending the prompt to the selected model.
 
 ### 1.2: Main features
 
-- **Multiple AI providers:** Configure DeepSeek, Google, OpenAI, and custom OpenAI-compatible endpoints at the same time.
+- **Multiple AI providers:** Configure Anthropic, DeepSeek, Google, OpenAI, and custom OpenAI-compatible endpoints at the same time.
 - **Multimodal media:** Natively process images, audio, video, and voice notes (via Google Gemini) directly from Telegram.
 - **Per-model temperature:** Override the global temperature setting independently for each model in configuration.
 - **Group media extraction:** Reply to an existing photo, audio, or video message with `@botname` in a group chat to instantly process it.
-- **Graceful degradation:** Provide safe placeholder descriptions to text-only models when media is accidentally sent to them.
+- **Unsupported-media protection:** Reject audio and video requests when the selected adapter cannot send that media instead of silently discarding attachments.
 - **Per-chat model selection:** Use an inline Telegram keyboard to choose a provider and model for each chat.
 - **Streaming responses:** Receive a live preview while the model generates, followed by the complete response with dedicated error recovery.
 - **Persistent memory:** Store bounded conversation history in SQLite and restore it after a restart.
@@ -163,23 +163,36 @@ Each item under `providers` defines one independently named backend.
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `name` | Yes | Unique provider name displayed in model selection |
-| `type` | Recommended | `deepseek`, `openai`, or `custom` |
+| `type` | Recommended | `anthropic`, `deepseek`, `google`, `openai`, or `custom` |
 | `enabled` | No | Enables the provider; defaults to `true` when omitted |
 | `api_key` | Yes when enabled | Credential sent to the provider |
 | `api_base` | No | Base endpoint; an empty value uses the type's default |
 | `models` | Yes when enabled | Models available through `/model` |
 
-If `type` is omitted, a provider named `deepseek` or `openai` inherits the matching type. Every other provider name defaults to `custom`.
+If `type` is omitted, a provider named `anthropic`, `deepseek`, `google`, or `openai` inherits the matching type. Every other provider name defaults to `custom`.
 
 Default base endpoints are:
 
 | Provider type | Default base endpoint |
 | --- | --- |
+| `anthropic` | `https://api.anthropic.com` |
 | `deepseek` | `https://api.deepseek.com` |
+| `google` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
 | `openai` | `https://api.openai.com/v1` |
 | `custom` | `https://api.openai.com/v1` |
 
 Disabled providers remain in the YAML file but are not loaded into the runtime registry or model menu. At least one provider must be enabled.
+
+Anthropic uses its native Messages API and requires an Anthropic Console API key; it does not require a sign-in proxy. Its temperature range is `0` to `1`. When the global `chat.temperature` is above `1`, every enabled Anthropic model must set a valid model-level `temperature` override or configuration validation will stop startup.
+
+```yaml
+- name: anthropic
+  type: anthropic
+  api_key: "replace-with-anthropic-api-key"
+  models:
+    - name: claude-sonnet-4-6
+      temperature: 0.7
+```
 
 ### 4.3: Model configuration
 
@@ -191,6 +204,7 @@ Each enabled provider must expose at least one model.
 | `input_price` | No | USD per one million prompt tokens |
 | `output_price` | No | USD per one million completion tokens |
 | `max_context_tokens` | No | Model-specific context limit; `0` inherits the global chat limit |
+| `temperature` | No | Model-specific override; `0` to `2` generally and `0` to `1` for Anthropic |
 
 The first model of the first enabled provider is the default. A selection made through `/model` is persisted per Telegram chat.
 
@@ -288,23 +302,28 @@ Omni downloads the largest available Telegram photo variant and sends it as an i
 - A photo without a caption receives the default prompt `What is in this image?`.
 - In groups, start the photo caption with `@your_bot_username` unless the photo is sent as a reply to the bot.
 - The selected provider and model must support the supplied multimodal request format.
+- Anthropic accepts JPEG, PNG, GIF, and WebP photos through its native Messages API. Audio and video remain unsupported and are rejected before a request is sent.
 
 Only a textual placeholder and optional caption are stored in conversation history; raw image bytes are not persisted in SQLite.
 
 ### 5.4: Commands
 
-| Command | Aliases | Behavior |
-| --- | --- | --- |
-| `/model` | None | Open an inline keyboard and persist the selected provider and model for the chat |
-| `/clear` | `/dsclear` | Delete the current chat's persisted and in-memory conversation history |
-| `/usage` | `/dsusage` | Show this user's token totals in the current chat and estimate cost when pricing is configured |
-| `/export` | `/dsexport` | Export all stored conversations to `memory_export.json` |
-| `/help` | `/dshelp` | Display the command summary |
-| `/start` | None | Display the welcome message in a private chat |
+| Command | Behavior |
+| --- | --- |
+| `/model` | Open an inline keyboard and persist the selected provider and model for the chat |
+| `/ping` | Check the bot's network latency |
+| `/version` | Display build and Go runtime information |
+| `/clear` | Delete the current chat's persisted and in-memory conversation history |
+| `/usage` | Show this user's token totals in the current chat and estimate cost when pricing is configured |
+| `/setprompt` | Set a custom system prompt for the current chat |
+| `/clearprompt` | Restore the configured default system prompt |
+| `/export` | Export all stored conversations; restricted to explicitly allowed users and administrators |
+| `/help` | Display the command summary |
+| `/start` | Display the welcome message in a private chat |
 
 The router also recognizes `!` as a command prefix. Telegram privacy mode may not deliver `!` commands from groups, so `/` is the reliable prefix there.
 
-`/export` is available to every allowed caller and exports all stored chats, not only the current chat. Treat access to the bot and its working directory accordingly.
+`/export` exports all stored chats, not only the current chat. The sender must be listed under `telegram.allowed_user_ids` or `telegram.admin_user_ids`, including when invoking the command from an allowed group.
 
 ### 5.5: Streaming and long replies
 
@@ -375,7 +394,7 @@ The repository ignores common local runtime artifacts, including:
 | `internal/config` | Strict YAML loading, defaults, normalization, and validation |
 | `internal/bot` | Telegram update routing, commands, callbacks, streaming, images, and message delivery |
 | `internal/providers` | Enabled-provider registry, model resolution, and provider adapter boundary |
-| `internal/providers/platforms` | DeepSeek, OpenAI, and custom OpenAI-compatible HTTP adapters |
+| `internal/providers/platforms` | Native Anthropic and Google adapters plus DeepSeek, OpenAI, and custom OpenAI-compatible adapters |
 | `internal/storage` | SQLite schema, conversation history, model preferences, exports, and usage records |
 | `internal/telegramhtml` | Markdown rendering and sanitized Telegram HTML output |
 | `internal/logging` | Structured application logging and safe text metrics |
@@ -548,7 +567,8 @@ Increase the applicable `max_context_tokens`, reduce `max_reply_tokens`, shorten
 - Private chats are authorized by Telegram user ID.
 - Group chats are authorized by numeric chat ID and then shared by all members whose updates reach the bot.
 - Administrators currently receive startup notifications and inherit private-user access.
-- Management commands are not otherwise restricted to administrators.
+- `/export` requires the sender to be explicitly listed under `allowed_user_ids` or `admin_user_ids`; group allowlisting alone is insufficient.
+- Other management commands are not restricted to administrators.
 
 ### 11.3: Stored and logged data
 
