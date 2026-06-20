@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
+	telegram "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
 	"github.com/andatoshiki/omni/internal/providers"
@@ -182,17 +184,22 @@ func (c *CommandHandler) Model(ctx context.Context, msg *models.Message) {
 }
 
 func (c *CommandHandler) Help(ctx context.Context, msg *models.Message) {
-	_, _ = c.app.sendReplyToMessage(ctx, msg, "🤖 AI Telegram Bot\n\n"+
-		"Available commands:\n\n"+
-		"/model - select AI model\n"+
-		"/ping - check bot latency\n"+
-		"/clear - clear conversation history\n"+
-		"/usage - show your token usage in this chat\n"+
-		"/setprompt - set a custom system prompt\n"+
-		"/clearprompt - clear the custom prompt\n"+
-		"/version - show bot version and build details\n"+
-		"/help - show this help\n"+
-		"/export - export all memories")
+	helpText := `🤖 **Omni**
+
+A versatile, Go-based Telegram bot supporting multiple AI platforms; with persistent memory, model switching, and token tracking. Developed with ❤️ by [Anda Toshiki](https://t.me/toshikidev), open-sourced on [GitHub](https://github.com/andatoshiki/omni) under GPL-v3. Get your instance of Omni bot under minutes with minimal configuration!
+
+**Available Commands:**
+/model - Switch between AI models on the fly
+/ping - Check the bot's network latency
+/clear - Wipe your conversation history and start fresh
+/usage - View your current token usage and estimated costs
+/setprompt - Assign a custom personality or system prompt to the bot
+/clearprompt - Revert to the default system prompt
+/export - Download your entire chat history as a JSON file
+/version - View build metadata and active Go environment
+/help - Show this comprehensive help message`
+
+	_, _ = c.app.sendReplyToMessage(ctx, msg, helpText)
 }
 
 func (c *CommandHandler) Clear(ctx context.Context, msg *models.Message) {
@@ -204,11 +211,31 @@ func (c *CommandHandler) Clear(ctx context.Context, msg *models.Message) {
 }
 
 func (c *CommandHandler) Export(ctx context.Context, msg *models.Message) {
-	if err := c.app.store.ExportMemory("memory_export.json"); err != nil {
+	filename := time.Now().Format("2006-01-02-15-04-05") + "-memory-export.json"
+	if err := c.app.store.ExportMemory(filename); err != nil {
 		_, _ = c.reply(ctx, msg, errorMessage(err))
 		return
 	}
-	_, _ = c.reply(ctx, msg, "✅ Memory exported to memory_export.json")
+	_, _ = c.reply(ctx, msg, "✅ Memory exported successfully.")
+
+	file, err := os.Open(filename)
+	if err != nil {
+		c.app.logger.Error("failed to open export file", "error", err)
+		return
+	}
+	defer file.Close()
+	defer os.Remove(filename)
+
+	_, err = c.app.client.SendDocument(ctx, &telegram.SendDocumentParams{
+		ChatID: msg.Chat.ID,
+		Document: &models.InputFileUpload{
+			Filename: filename,
+			Data:     file,
+		},
+	})
+	if err != nil {
+		c.app.logger.Error("failed to send export document", "error", err)
+	}
 }
 
 func (c *CommandHandler) Start(ctx context.Context, msg *models.Message) {

@@ -90,7 +90,6 @@ func (a *App) Run(ctx context.Context) {
 
 	a.preparePolling(ctx)
 	a.registerCommands(ctx)
-	a.sendTextToAdmins(ctx, "🤖 Bot started")
 	a.logger.Info(
 		"telegram polling starting",
 		"bot_username", a.botUsername,
