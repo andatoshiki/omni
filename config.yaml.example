@@ -33,12 +33,14 @@ providers:
     enabled: true
     api_key: "YOUR_GEMINI_API_KEY_HERE"
     models:
-      - name: gemini-1.5-flash
+      - name: gemini-2.5-flash
         input_price: 0.075
         output_price: 0.30
-      - name: gemini-1.5-pro
+        temperature: 0.4
+      - name: gemini-2.5-pro
         input_price: 1.25
         output_price: 5.00
+        temperature: 0.7
 
 database:
   path: "omni.db"

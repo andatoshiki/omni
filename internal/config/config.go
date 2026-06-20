@@ -85,10 +85,11 @@ func (p ProviderConfig) EffectiveType() string {
 }
 
 type ModelConfig struct {
-	Name             string  `yaml:"name"`
-	InputPrice       float64 `yaml:"input_price"`        // USD per 1M input tokens
-	OutputPrice      float64 `yaml:"output_price"`       // USD per 1M output tokens
-	MaxContextTokens int     `yaml:"max_context_tokens"` // 0 inherits chat.max_context_tokens
+	Name             string   `yaml:"name"`
+	InputPrice       float64  `yaml:"input_price"`        // USD per 1M input tokens
+	OutputPrice      float64  `yaml:"output_price"`       // USD per 1M output tokens
+	Temperature      *float32 `yaml:"temperature,omitempty"`
+	MaxContextTokens int      `yaml:"max_context_tokens"` // 0 inherits chat.max_context_tokens
 }
 
 type chatConfig struct {

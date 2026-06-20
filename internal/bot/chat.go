@@ -95,6 +95,12 @@ func (c *CommandHandler) Chat(ctx context.Context, msg *models.Message) {
 		MaxTokens:   c.app.params.MaxReplyTokens,
 		Messages:    requestMessages,
 	}
+
+	modelConfig := c.app.providers.LookupModelConfig(modelID)
+	if modelConfig != nil && modelConfig.Temperature != nil {
+		request.Temperature = *modelConfig.Temperature
+	}
+
 	c.app.logger.Info(
 		"ai chat request started",
 		append(
