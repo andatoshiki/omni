@@ -10,6 +10,7 @@ import (
 	"github.com/go-telegram/bot/models"
 
 	"github.com/andatoshiki/omni/internal/providers"
+	"github.com/andatoshiki/omni/internal/version"
 )
 
 type CommandHandlerFunc func(ctx context.Context, msg *models.Message)
@@ -34,6 +35,7 @@ func NewCommandHandler(app *App) *CommandHandler {
 	}
 
 	c.routes["ping"] = Route{Handler: c.Ping, Description: "Check bot latency"}
+	c.routes["version"] = Route{Handler: c.Version, Description: "Show bot version"}
 	c.routes["model"] = Route{Handler: c.Model, Description: "Select AI model"}
 	c.routes["clear"] = Route{Handler: c.Clear, Description: "Clear conversation history"}
 	c.routes["usage"] = Route{Handler: c.Usage, Description: "Show token usage"}
@@ -188,6 +190,7 @@ func (c *CommandHandler) Help(ctx context.Context, msg *models.Message) {
 		"/usage - show your token usage in this chat\n"+
 		"/setprompt - set a custom system prompt\n"+
 		"/clearprompt - clear the custom prompt\n"+
+		"/version - show bot version and build details\n"+
 		"/help - show this help\n"+
 		"/export - export all memories")
 }
@@ -232,4 +235,10 @@ func (c *CommandHandler) ClearPrompt(ctx context.Context, msg *models.Message) {
 		return
 	}
 	_, _ = c.reply(ctx, msg, "✅ Custom prompt cleared! Falling back to the default.")
+}
+
+func (c *CommandHandler) Version(ctx context.Context, msg *models.Message) {
+	text := fmt.Sprintf("Omni\nVersion: <code>%s</code>\nCommit: <code>%s</code>\nBuild time: <code>%s</code>\nGo: <code>%s</code>",
+		version.Version, version.Commit, version.BuildTime, version.GoVersion())
+	_, _ = c.reply(ctx, msg, text)
 }
