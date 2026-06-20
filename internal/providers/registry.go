@@ -10,6 +10,7 @@ import (
 
 	"github.com/andatoshiki/omni/internal/config"
 	"github.com/andatoshiki/omni/internal/providers/platforms"
+	anthropicplatform "github.com/andatoshiki/omni/internal/providers/platforms/anthropic"
 	customplatform "github.com/andatoshiki/omni/internal/providers/platforms/custom"
 	deepseekplatform "github.com/andatoshiki/omni/internal/providers/platforms/deepseek"
 	googleplatform "github.com/andatoshiki/omni/internal/providers/platforms/google"
@@ -39,10 +40,11 @@ type Registry struct {
 }
 
 var defaultBaseURLs = map[string]string{
-	config.ProviderTypeDeepSeek: "https://api.deepseek.com",
-	config.ProviderTypeOpenAI:   "https://api.openai.com/v1",
-	config.ProviderTypeCustom:   "https://api.openai.com/v1",
-	config.ProviderTypeGoogle:   "https://generativelanguage.googleapis.com/v1beta/openai/",
+	config.ProviderTypeDeepSeek:  "https://api.deepseek.com",
+	config.ProviderTypeOpenAI:    "https://api.openai.com/v1",
+	config.ProviderTypeCustom:    "https://api.openai.com/v1",
+	config.ProviderTypeGoogle:    "https://generativelanguage.googleapis.com/v1beta/openai/",
+	config.ProviderTypeAnthropic: "https://api.anthropic.com",
 }
 
 // NewRegistry initializes the provider registry from config.
@@ -98,6 +100,8 @@ func adapterForType(providerType string, timeout *time.Duration) (Adapter, error
 		return customplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypeGoogle:
 		return googleplatform.Adapter{Timeout: timeout}, nil
+	case config.ProviderTypeAnthropic:
+		return anthropicplatform.Adapter{HTTPClient: client}, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type %q", providerType)
 	}

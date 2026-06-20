@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	ProviderTypeDeepSeek = "deepseek"
-	ProviderTypeOpenAI   = "openai"
-	ProviderTypeCustom   = "custom"
-	ProviderTypeGoogle   = "google"
-	DefaultDatabasePath  = "omni.db"
+	ProviderTypeDeepSeek  = "deepseek"
+	ProviderTypeOpenAI    = "openai"
+	ProviderTypeCustom    = "custom"
+	ProviderTypeGoogle    = "google"
+	ProviderTypeAnthropic = "anthropic"
+	DefaultDatabasePath   = "omni.db"
 )
 
 type Params struct {
@@ -79,6 +80,8 @@ func (p ProviderConfig) EffectiveType() string {
 		return ProviderTypeOpenAI
 	case ProviderTypeGoogle:
 		return ProviderTypeGoogle
+	case ProviderTypeAnthropic:
+		return ProviderTypeAnthropic
 	default:
 		return ProviderTypeCustom
 	}
@@ -86,8 +89,8 @@ func (p ProviderConfig) EffectiveType() string {
 
 type ModelConfig struct {
 	Name             string   `yaml:"name"`
-	InputPrice       float64  `yaml:"input_price"`        // USD per 1M input tokens
-	OutputPrice      float64  `yaml:"output_price"`       // USD per 1M output tokens
+	InputPrice       float64  `yaml:"input_price"`  // USD per 1M input tokens
+	OutputPrice      float64  `yaml:"output_price"` // USD per 1M output tokens
 	Temperature      *float32 `yaml:"temperature,omitempty"`
 	MaxContextTokens int      `yaml:"max_context_tokens"` // 0 inherits chat.max_context_tokens
 }
@@ -240,9 +243,9 @@ func (p *Params) validate() error {
 		providerNames[providerName] = i
 
 		switch prov.EffectiveType() {
-		case ProviderTypeDeepSeek, ProviderTypeOpenAI, ProviderTypeCustom, ProviderTypeGoogle:
+		case ProviderTypeDeepSeek, ProviderTypeOpenAI, ProviderTypeCustom, ProviderTypeGoogle, ProviderTypeAnthropic:
 		default:
-			return fmt.Errorf("providers[%d].type must be one of deepseek, openai, custom, google (provider: %s)", i, providerName)
+			return fmt.Errorf("providers[%d].type must be one of deepseek, openai, custom, google, anthropic (provider: %s)", i, providerName)
 		}
 
 		if !prov.IsEnabled() {
@@ -264,6 +267,17 @@ func (p *Params) validate() error {
 			}
 			if model.MaxContextTokens > 0 && model.MaxContextTokens <= p.MaxReplyTokens {
 				return fmt.Errorf("providers[%d].models[%d].max_context_tokens must be greater than chat.max_reply_tokens (provider: %s)", i, j, providerName)
+			}
+			if model.Temperature != nil && (*model.Temperature < 0 || *model.Temperature > 2) {
+				return fmt.Errorf("providers[%d].models[%d].temperature must be between 0 and 2 (provider: %s)", i, j, providerName)
+			}
+
+			effectiveTemperature := p.Temperature
+			if model.Temperature != nil {
+				effectiveTemperature = float64(*model.Temperature)
+			}
+			if prov.EffectiveType() == ProviderTypeAnthropic && effectiveTemperature > 1 {
+				return fmt.Errorf("providers[%d].models[%d].temperature must be between 0 and 1 for Anthropic (provider: %s)", i, j, providerName)
 			}
 		}
 	}

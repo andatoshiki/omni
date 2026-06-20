@@ -28,6 +28,20 @@ providers:
   #       input_price: 0.15
   #       output_price: 0.60
 
+  # Anthropic uses its native Messages API, not an OpenAI-compatible proxy.
+  # Obtain an API key from the Anthropic Console. Anthropic temperatures must
+  # be between 0 and 1, so each model needs an override when chat.temperature
+  # is greater than 1.
+  # - name: anthropic
+  #   type: anthropic
+  #   enabled: true
+  #   api_key: ""
+  #   api_base: ""  # leave empty for default (https://api.anthropic.com)
+  #   timeout: 10m
+  #   models:
+  #     - name: claude-sonnet-4-6
+  #       temperature: 0.7
+
   - name: google
     type: google
     enabled: true

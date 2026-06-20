@@ -193,6 +193,61 @@ telegram:
 	}
 }
 
+func TestParamsLoadAnthropicProvider(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: anthropic
+    api_key: sk-ant-test
+    models:
+      - name: claude-test
+        temperature: 0.7
+telegram:
+  bot_token: 123:test
+`)
+
+	var got Params
+	if err := got.Load(filename); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.Providers[0].EffectiveType() != ProviderTypeAnthropic {
+		t.Fatalf("EffectiveType() = %q, want anthropic", got.Providers[0].EffectiveType())
+	}
+}
+
+func TestParamsLoadRejectsAnthropicTemperatureAboveOne(t *testing.T) {
+	tests := []struct {
+		name        string
+		temperature string
+	}{
+		{name: "global", temperature: ""},
+		{name: "model override", temperature: "        temperature: 1.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filename := writeTestConfig(t, `
+providers:
+  - name: claude-provider
+    type: anthropic
+    api_key: sk-ant-test
+    models:
+      - name: claude-test
+`+tt.temperature+`
+chat:
+  temperature: 1.3
+telegram:
+  bot_token: 123:test
+`)
+
+			var got Params
+			err := got.Load(filename)
+			if err == nil || !strings.Contains(err.Error(), "between 0 and 1 for Anthropic") {
+				t.Fatalf("Load() error = %v, want Anthropic temperature error", err)
+			}
+		})
+	}
+}
+
 func TestParamsLoadRejectsDuplicateProviderNames(t *testing.T) {
 	filename := writeTestConfig(t, `
 providers:

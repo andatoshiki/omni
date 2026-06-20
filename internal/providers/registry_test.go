@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/andatoshiki/omni/internal/config"
+	anthropicplatform "github.com/andatoshiki/omni/internal/providers/platforms/anthropic"
 	customplatform "github.com/andatoshiki/omni/internal/providers/platforms/custom"
 )
 
@@ -44,6 +45,30 @@ func TestRegistrySupportsMultipleCustomProviders(t *testing.T) {
 	}
 	if _, ok := hosted.adapter.(customplatform.Adapter); !ok {
 		t.Fatalf("custom adapter = %T, want custom.Adapter", hosted.adapter)
+	}
+}
+
+func TestRegistrySupportsAnthropic(t *testing.T) {
+	registry, err := NewRegistry([]config.ProviderConfig{{
+		Name: "anthropic", APIKey: "sk-ant-test",
+		Models: []config.ModelConfig{{Name: "claude-test"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider, err := registry.Resolve(ModelID{Provider: "anthropic", Model: "claude-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider.Type != config.ProviderTypeAnthropic {
+		t.Fatalf("provider type = %q, want anthropic", provider.Type)
+	}
+	if provider.BaseURL != "https://api.anthropic.com" {
+		t.Fatalf("provider BaseURL = %q, want Anthropic default", provider.BaseURL)
+	}
+	if _, ok := provider.adapter.(anthropicplatform.Adapter); !ok {
+		t.Fatalf("provider adapter = %T, want anthropic.Adapter", provider.adapter)
 	}
 }
 
