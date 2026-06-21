@@ -14,7 +14,7 @@ import (
 
 func (a *App) handleMessage(ctx context.Context, update *models.Update) {
 	msg := update.Message
-	if msg == nil || (msg.Text == "" && len(msg.Photo) == 0 && msg.Voice == nil && msg.Audio == nil && msg.Video == nil && msg.VideoNote == nil) {
+	if msg == nil || (msg.Text == "" && len(msg.Photo) == 0 && msg.Voice == nil && msg.Audio == nil && msg.Video == nil && msg.VideoNote == nil && msg.Document == nil) {
 		return
 	}
 	a.logger.Info("telegram message received", a.messageLogAttrs(msg)...)
@@ -139,7 +139,7 @@ func (a *App) routeCommand(ctx context.Context, msg *models.Message) {
 	prefix := string(commandToken[0])
 	command := strings.TrimPrefix(commandToken, prefix)
 	msg.Text = strings.TrimSpace(strings.TrimPrefix(msg.Text, strings.Fields(msg.Text)[0]))
-	if len(msg.Photo) > 0 || msg.Voice != nil || msg.Audio != nil || msg.Video != nil || msg.VideoNote != nil {
+	if len(msg.Photo) > 0 || msg.Voice != nil || msg.Audio != nil || msg.Video != nil || msg.VideoNote != nil || msg.Document != nil {
 		msg.Caption = msg.Text
 	}
 	attrs := append(a.messageLogAttrs(msg), "command", command, "command_prefix", prefix)

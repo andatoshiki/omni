@@ -73,7 +73,7 @@ providers:
 database:
   path: "omni.db"
 
-chat:
+global:
   initial_prompt: >-
     You are a helpful assistant. Use Telegram-compatible Markdown when
     formatting improves readability. Do not use LaTeX formatting.

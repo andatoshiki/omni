@@ -12,7 +12,8 @@ Private conversations work like a normal direct message. In an allowed group, us
 
 ### 1.2: Main features
 
-- **Multiple AI providers:** Configure Anthropic, DeepSeek, Google, OpenAI, and custom OpenAI-compatible endpoints at the same time.
+- **Multiple AI providers:** Configure Anthropic, DeepSeek, Google, OpenAI, xAI (Grok), and custom OpenAI-compatible endpoints at the same time.
+- **Reliable sender attribution:** Transparently resolves Telegram sender identities and `@mentions` in group chats to help the AI model distinguish between different participants.
 - **Multimodal media:** Natively process images, audio, video, and voice notes (via Google Gemini) directly from Telegram.
 - **Per-model temperature:** Override the global temperature setting independently for each model in configuration.
 - **Group media extraction:** Reply to an existing photo, audio, or video message with `@botname` in a group chat to instantly process it.
@@ -137,7 +138,7 @@ providers:
 database:
   path: "omni.db"
 
-chat:
+global:
   initial_prompt: >-
     You are a helpful assistant. Use Telegram-compatible Markdown when
     formatting improves readability. Do not use LaTeX formatting.
@@ -145,6 +146,7 @@ chat:
   max_reply_tokens: 2048
   max_context_tokens: 8192
   history_size: 4
+  sender_context: "groups"
 
 telegram:
   bot_token: "replace-with-telegram-token"
@@ -163,13 +165,13 @@ Each item under `providers` defines one independently named backend.
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `name` | Yes | Unique provider name displayed in model selection |
-| `type` | Recommended | `anthropic`, `deepseek`, `google`, `openai`, or `custom` |
+| `type` | Recommended | `anthropic`, `deepseek`, `google`, `openai`, `xai`, or `custom` |
 | `enabled` | No | Enables the provider; defaults to `true` when omitted |
 | `api_key` | Yes when enabled | Credential sent to the provider |
 | `api_base` | No | Base endpoint; an empty value uses the type's default |
 | `models` | Yes when enabled | Models available through `/model` |
 
-If `type` is omitted, a provider named `anthropic`, `deepseek`, `google`, or `openai` inherits the matching type. Every other provider name defaults to `custom`.
+If `type` is omitted, a provider named `anthropic`, `deepseek`, `google`, `openai`, or `xai` inherits the matching type. Every other provider name defaults to `custom`.
 
 Default base endpoints are:
 
@@ -179,6 +181,7 @@ Default base endpoints are:
 | `deepseek` | `https://api.deepseek.com` |
 | `google` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
 | `openai` | `https://api.openai.com/v1` |
+| `xai` | `https://api.x.ai/v1` |
 | `custom` | `https://api.openai.com/v1` |
 
 Disabled providers remain in the YAML file but are not loaded into the runtime registry or model menu. At least one provider must be enabled.
@@ -219,6 +222,7 @@ Pricing values are informational. Omni uses them for `/usage` estimates and does
 | `max_reply_tokens` | `2048` | Must be greater than `0` |
 | `max_context_tokens` | `8192` | Must be greater than `max_reply_tokens` |
 | `history_size` | `4` | Maximum persisted history message entries; must be greater than `0` |
+| `sender_context` | `"groups"` | Controls identity labels: `"groups"` (group chats only), `"all"`, or `"off"` |
 
 Before a request is sent, Omni reserves `max_reply_tokens` inside the active context limit. It keeps the newest history entries that fit and drops older entries from the request. A model-level `max_context_tokens` overrides the global value for that model.
 
@@ -290,6 +294,8 @@ In an allowed group, place the bot username first:
 ```
 
 The username match is case-insensitive. Omni removes the matched mention and surrounding whitespace before calling the model. A longer, different username is not treated as a match.
+
+When `sender_context` is enabled (the default for groups), Omni will automatically prepend `[telegram speaker: Name]` labels to user messages and format replies to preserve the flow of multi-user conversations.
 
 Users can also reply directly to a message from the bot. The replied-to text is included as assistant context for the new request.
 

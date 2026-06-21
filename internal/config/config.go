@@ -45,7 +45,7 @@ type Params struct {
 type configFile struct {
 	Providers []ProviderConfig `yaml:"providers"`
 	Database  databaseConfig   `yaml:"database"`
-	Chat      chatConfig       `yaml:"chat"`
+	Global    globalConfig     `yaml:"global"`
 	Telegram  telegramConfig   `yaml:"telegram"`
 }
 
@@ -96,10 +96,11 @@ type ModelConfig struct {
 	InputPrice       float64  `yaml:"input_price"`  // USD per 1M input tokens
 	OutputPrice      float64  `yaml:"output_price"` // USD per 1M output tokens
 	Temperature      *float32 `yaml:"temperature,omitempty"`
-	MaxContextTokens int      `yaml:"max_context_tokens"` // 0 inherits chat.max_context_tokens
+	MaxReplyTokens   int      `yaml:"max_reply_tokens"`   // 0 inherits global.max_reply_tokens
+	MaxContextTokens int      `yaml:"max_context_tokens"` // 0 inherits global.max_context_tokens
 }
 
-type chatConfig struct {
+type globalConfig struct {
 	InitialPrompt    string  `yaml:"initial_prompt"`
 	Temperature      float64 `yaml:"temperature"`
 	MaxReplyTokens   int     `yaml:"max_reply_tokens"`
@@ -152,7 +153,7 @@ func (p *Params) Load(filename string) error {
 		Database: databaseConfig{
 			Path: DefaultDatabasePath,
 		},
-		Chat: chatConfig{
+		Global: globalConfig{
 			Temperature:      1.3,
 			MaxReplyTokens:   2048,
 			MaxContextTokens: 8192,
@@ -178,12 +179,12 @@ func (p *Params) Load(filename string) error {
 		Providers:        cfg.Providers,
 		BotToken:         strings.TrimSpace(cfg.Telegram.BotToken),
 		DatabasePath:     databasePath,
-		InitialPrompt:    cfg.Chat.InitialPrompt,
-		Temperature:      cfg.Chat.Temperature,
-		MaxReplyTokens:   cfg.Chat.MaxReplyTokens,
-		MaxContextTokens: cfg.Chat.MaxContextTokens,
-		HistorySize:      cfg.Chat.HistorySize,
-		SenderContext:    cfg.Chat.SenderContext,
+		InitialPrompt:    cfg.Global.InitialPrompt,
+		Temperature:      cfg.Global.Temperature,
+		MaxReplyTokens:   cfg.Global.MaxReplyTokens,
+		MaxContextTokens: cfg.Global.MaxContextTokens,
+		HistorySize:      cfg.Global.HistorySize,
+		SenderContext:    cfg.Global.SenderContext,
 		AllowedUserIDs:   deduplicateIDs(cfg.Telegram.AllowedUserIDs),
 		AdminUserIDs:     deduplicateIDs(cfg.Telegram.AdminUserIDs),
 		AllowedGroupIDs:  deduplicateIDs(cfg.Telegram.AllowedGroupIDs),
@@ -269,11 +270,23 @@ func (p *Params) validate() error {
 			if strings.TrimSpace(model.Name) == "" {
 				return fmt.Errorf("providers[%d].models[%d].name is required (provider: %s)", i, j, providerName)
 			}
+			if model.MaxReplyTokens < 0 {
+				return fmt.Errorf("providers[%d].models[%d].max_reply_tokens must not be negative (provider: %s)", i, j, providerName)
+			}
 			if model.MaxContextTokens < 0 {
 				return fmt.Errorf("providers[%d].models[%d].max_context_tokens must not be negative (provider: %s)", i, j, providerName)
 			}
-			if model.MaxContextTokens > 0 && model.MaxContextTokens <= p.MaxReplyTokens {
-				return fmt.Errorf("providers[%d].models[%d].max_context_tokens must be greater than chat.max_reply_tokens (provider: %s)", i, j, providerName)
+			
+			effReplyTokens := p.MaxReplyTokens
+			if model.MaxReplyTokens > 0 {
+				effReplyTokens = model.MaxReplyTokens
+			}
+			effContextTokens := p.MaxContextTokens
+			if model.MaxContextTokens > 0 {
+				effContextTokens = model.MaxContextTokens
+			}
+			if effContextTokens <= effReplyTokens {
+				return fmt.Errorf("providers[%d].models[%d] effective max_context_tokens (%d) must be greater than effective max_reply_tokens (%d) (provider: %s)", i, j, effContextTokens, effReplyTokens, providerName)
 			}
 			if model.Temperature != nil && (*model.Temperature < 0 || *model.Temperature > 2) {
 				return fmt.Errorf("providers[%d].models[%d].temperature must be between 0 and 2 (provider: %s)", i, j, providerName)
@@ -298,22 +311,22 @@ func (p *Params) validate() error {
 		return fmt.Errorf("database.path is required")
 	}
 	if p.Temperature < 0 || p.Temperature > 2 {
-		return fmt.Errorf("chat.temperature must be between 0 and 2")
+		return fmt.Errorf("global.temperature must be between 0 and 2")
 	}
 	if p.MaxReplyTokens <= 0 {
-		return fmt.Errorf("chat.max_reply_tokens must be greater than 0")
+		return fmt.Errorf("global.max_reply_tokens must be greater than 0")
 	}
 	if p.MaxContextTokens <= p.MaxReplyTokens {
-		return fmt.Errorf("chat.max_context_tokens must be greater than chat.max_reply_tokens")
+		return fmt.Errorf("global.max_context_tokens must be greater than global.max_reply_tokens")
 	}
 	if p.HistorySize <= 0 {
-		return fmt.Errorf("chat.history_size must be greater than 0")
+		return fmt.Errorf("global.history_size must be greater than 0")
 	}
 	switch p.SenderContext {
 	case "off", "groups", "all":
 		// Valid
 	default:
-		return fmt.Errorf("chat.sender_context must be one of: off, groups, all")
+		return fmt.Errorf("global.sender_context must be one of: off, groups, all")
 	}
 	return nil
 }

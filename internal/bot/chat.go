@@ -96,12 +96,17 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 	renderedHistory := conversation.Render(history, includeIdentity)
 	renderedCurrent := conversation.Render(currentMessages, includeIdentity)
 
+	maxReplyTokens := c.app.params.MaxReplyTokens
+	if model := c.app.providers.LookupModelConfig(modelID); model != nil && model.MaxReplyTokens > 0 {
+		maxReplyTokens = model.MaxReplyTokens
+	}
+
 	requestMessages, promptTokens, droppedHistory, err := messagesWithinContext(
 		providers.ChatMessage{Role: providers.RoleSystem, Content: initialPrompt},
 		renderedHistory,
 		renderedCurrent,
 		maxContextTokens,
-		c.app.params.MaxReplyTokens,
+		maxReplyTokens,
 	)
 	if err != nil {
 		c.app.logger.Error("failed to build ai context window", append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)...)
@@ -112,7 +117,7 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 	request := &providers.ChatCompletionStreamRequest{
 		Model:       modelID.Model,
 		Temperature: float32(c.app.params.Temperature),
-		MaxTokens:   c.app.params.MaxReplyTokens,
+		MaxTokens:   maxReplyTokens,
 		Messages:    requestMessages,
 	}
 
