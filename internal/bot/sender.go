@@ -206,11 +206,7 @@ func (a *App) sendChatActionTyping(ctx context.Context, msg *models.Message) {
 	}
 }
 
-func (a *App) sendTextToAdmins(ctx context.Context, text string) {
-	for _, chatID := range a.params.AdminUserIDs {
-		_, _ = a.sendMessage(ctx, chatID, text)
-	}
-}
+
 
 func (a *App) textMetricAttrs(prefix, text string) []any {
 	return logging.TextMetricAttrs(prefix, text)

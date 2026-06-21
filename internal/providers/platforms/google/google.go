@@ -97,7 +97,7 @@ func (a Adapter) CreateChatCompletionStream(
 		config.SystemInstruction = &genai.Content{Parts: systemInstructions}
 	}
 
-	streamCtx := ctx
+	var streamCtx context.Context
 	var cancel context.CancelFunc
 	if a.Timeout != nil {
 		streamCtx, cancel = context.WithTimeout(ctx, *a.Timeout)
