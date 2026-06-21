@@ -48,6 +48,10 @@ var defaultBaseURLs = map[string]string{
 	config.ProviderTypeAnthropic:  "https://api.anthropic.com",
 	config.ProviderTypeXAI:        "https://api.x.ai/v1",
 	config.ProviderTypePerplexity: "https://api.perplexity.ai",
+	config.ProviderTypeOllama:     "http://localhost:11434/v1",
+	config.ProviderTypeGroq:       "https://api.groq.com/openai/v1",
+	config.ProviderTypeTogether:   "https://api.together.xyz/v1",
+	config.ProviderTypeMistral:    "https://api.mistral.ai/v1",
 }
 
 // NewRegistry initializes the provider registry from config.
@@ -110,6 +114,14 @@ func adapterForType(providerType string, timeout *time.Duration) (Adapter, error
 	case config.ProviderTypeXAI:
 		return xaiplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypePerplexity:
+		return openaiplatform.Adapter{HTTPClient: client}, nil
+	case config.ProviderTypeOllama:
+		return openaiplatform.Adapter{HTTPClient: client}, nil
+	case config.ProviderTypeGroq:
+		return openaiplatform.Adapter{HTTPClient: client}, nil
+	case config.ProviderTypeTogether:
+		return openaiplatform.Adapter{HTTPClient: client}, nil
+	case config.ProviderTypeMistral:
 		return openaiplatform.Adapter{HTTPClient: client}, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type %q", providerType)

@@ -70,6 +70,42 @@ providers:
   #       input_price: 0.20
   #       output_price: 0.20
 
+  # Uncomment to add Ollama (Local) support:
+  # - name: ollama
+  #   type: ollama
+  #   enabled: true
+  #   api_key: "ollama" # optional for local, but required by some parsers
+  #   api_base: ""  # leave empty for default (http://localhost:11434/v1)
+  #   models:
+  #     - name: llama3.2
+
+  # Uncomment to add Groq support:
+  # - name: groq
+  #   type: groq
+  #   enabled: true
+  #   api_key: ""
+  #   api_base: ""  # leave empty for default (https://api.groq.com/openai/v1)
+  #   models:
+  #     - name: llama-3.3-70b-versatile
+
+  # Uncomment to add Together AI support:
+  # - name: together
+  #   type: together
+  #   enabled: true
+  #   api_key: ""
+  #   api_base: ""  # leave empty for default (https://api.together.xyz/v1)
+  #   models:
+  #     - name: meta-llama/Llama-3.3-70B-Instruct-Turbo
+
+  # Uncomment to add Mistral AI support:
+  # - name: mistral
+  #   type: mistral
+  #   enabled: true
+  #   api_key: ""
+  #   api_base: ""  # leave empty for default (https://api.mistral.ai/v1)
+  #   models:
+  #     - name: mistral-large-latest
+
   - name: google
     type: google
     enabled: true

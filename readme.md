@@ -12,7 +12,7 @@ Private conversations work like a normal direct message. In an allowed group, us
 
 ### 1.2: Main features
 
-- **Multiple AI providers:** Configure Anthropic, DeepSeek, Google, OpenAI, Perplexity, xAI (Grok), and custom OpenAI-compatible endpoints at the same time.
+- **Multiple AI providers:** Configure Anthropic, DeepSeek, Google, Groq, Mistral, Ollama, OpenAI, Perplexity, Together AI, xAI (Grok), and custom OpenAI-compatible endpoints at the same time.
 - **Reliable sender attribution:** Transparently resolves Telegram sender identities and `@mentions` in group chats to help the AI model distinguish between different participants.
 - **Multimodal media:** Natively process images, audio, video, and voice notes (via Google Gemini) directly from Telegram.
 - **Document analysis:** Read and analyze text from PDF, DOCX, XLSX, and source code files sent as attachments.
@@ -166,13 +166,13 @@ Each item under `providers` defines one independently named backend.
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `name` | Yes | Unique provider name displayed in model selection |
-| `type` | Recommended | `anthropic`, `deepseek`, `google`, `openai`, `perplexity`, `xai`, or `custom` |
+| `type` | Recommended | `anthropic`, `deepseek`, `google`, `groq`, `mistral`, `ollama`, `openai`, `perplexity`, `together`, `xai`, or `custom` |
 | `enabled` | No | Enables the provider; defaults to `true` when omitted |
 | `api_key` | Yes when enabled | Credential sent to the provider |
 | `api_base` | No | Base endpoint; an empty value uses the type's default |
 | `models` | Yes when enabled | Models available through `/model` |
 
-If `type` is omitted, a provider named `anthropic`, `deepseek`, `google`, `openai`, `perplexity`, or `xai` inherits the matching type. Every other provider name defaults to `custom`.
+If `type` is omitted, a provider named `anthropic`, `deepseek`, `google`, `groq`, `mistral`, `ollama`, `openai`, `perplexity`, `together`, or `xai` inherits the matching type. Every other provider name defaults to `custom`.
 
 Default base endpoints are:
 
@@ -181,8 +181,12 @@ Default base endpoints are:
 | `anthropic` | `https://api.anthropic.com` |
 | `deepseek` | `https://api.deepseek.com` |
 | `google` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
+| `groq` | `https://api.groq.com/openai/v1` |
+| `mistral` | `https://api.mistral.ai/v1` |
+| `ollama` | `http://localhost:11434/v1` |
 | `openai` | `https://api.openai.com/v1` |
 | `perplexity` | `https://api.perplexity.ai` |
+| `together` | `https://api.together.xyz/v1` |
 | `xai` | `https://api.x.ai/v1` |
 | `custom` | `https://api.openai.com/v1` |
 
