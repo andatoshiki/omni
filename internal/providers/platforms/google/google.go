@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
-	"time"
 
 	"google.golang.org/genai"
 
@@ -18,7 +18,7 @@ import (
 // Adapter uses Google's official genai SDK to access Gemini directly,
 // allowing native support for audio, video, and streaming.
 type Adapter struct {
-	Timeout *time.Duration
+	HTTPClient *http.Client
 }
 
 func (a Adapter) CreateChatCompletionStream(
@@ -31,8 +31,9 @@ func (a Adapter) CreateChatCompletionStream(
 	}
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  endpoint.APIKey,
-		Backend: genai.BackendGeminiAPI,
+		APIKey:     endpoint.APIKey,
+		Backend:    genai.BackendGeminiAPI,
+		HTTPClient: a.HTTPClient,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create genai client: %w", err)
@@ -97,13 +98,7 @@ func (a Adapter) CreateChatCompletionStream(
 		config.SystemInstruction = &genai.Content{Parts: systemInstructions}
 	}
 
-	var streamCtx context.Context
-	var cancel context.CancelFunc
-	if a.Timeout != nil {
-		streamCtx, cancel = context.WithTimeout(ctx, *a.Timeout)
-	} else {
-		streamCtx, cancel = context.WithCancel(ctx)
-	}
+	streamCtx, cancel := context.WithCancel(ctx)
 
 	stream := client.Models.GenerateContentStream(streamCtx, request.Model, contents, config)
 

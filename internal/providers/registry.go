@@ -92,7 +92,9 @@ func NewRegistry(configs []config.ProviderConfig) (*Registry, error) {
 func adapterForType(providerType string, timeout *time.Duration) (Adapter, error) {
 	var client *http.Client
 	if timeout != nil {
-		client = &http.Client{Timeout: *timeout}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.ResponseHeaderTimeout = *timeout
+		client = &http.Client{Transport: transport}
 	}
 	switch providerType {
 	case config.ProviderTypeDeepSeek:
@@ -102,7 +104,7 @@ func adapterForType(providerType string, timeout *time.Duration) (Adapter, error
 	case config.ProviderTypeCustom:
 		return customplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypeGoogle:
-		return googleplatform.Adapter{Timeout: timeout}, nil
+		return googleplatform.Adapter{HTTPClient: client}, nil
 	case config.ProviderTypeAnthropic:
 		return anthropicplatform.Adapter{HTTPClient: client}, nil
 	case config.ProviderTypeXAI:

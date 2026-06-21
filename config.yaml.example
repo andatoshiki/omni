@@ -4,7 +4,7 @@ providers:
     enabled: true
     api_key: ""
     api_base: ""  # leave empty for default (https://api.deepseek.com)
-    timeout: 30s  # optional timeout for API requests (e.g., 30s, 1m)
+    timeout: 30s  # optional timeout for API connection and time-to-first-byte (e.g., 30s, 1m)
     models:
       - name: deepseek-chat
         max_context_tokens: 65536  # optional; overrides global.max_context_tokens
