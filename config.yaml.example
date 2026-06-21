@@ -131,7 +131,17 @@ providers:
         temperature: 0.7
 
 database:
-  path: "omni.db"
+  backend: "sqlite" # "sqlite" or "mysql"
+  
+  sqlite:
+    path: "omni.db"
+    
+  # mysql:
+  #   host: "127.0.0.1"
+  #   port: 3306
+  #   user: "omni_user"
+  #   password: "supersecretpassword"
+  #   database: "omni"
 
 global:
   initial_prompt: >-

@@ -9,11 +9,12 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/andatoshiki/omni/internal/config"
 	"github.com/andatoshiki/omni/internal/conversation"
 	"github.com/andatoshiki/omni/internal/providers"
 )
 
-const Schema = `
+const sqliteSchema = `
 	CREATE TABLE IF NOT EXISTS conversations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		chat_id INTEGER UNIQUE,
@@ -50,31 +51,32 @@ const Schema = `
 	);
 	`
 
-type Database struct {
+
+
+type sqliteStore struct {
 	conn *sql.DB
 }
 
-// Open initializes the SQLite database.
-func Open(filename string) (*Database, error) {
-	sqliteDatabase, err := sql.Open("sqlite", filename)
+func newSQLiteStore(cfg config.SQLiteConfig) (Store, error) {
+	sqliteDatabase, err := sql.Open("sqlite", cfg.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	db := &Database{conn: sqliteDatabase}
+	db := &sqliteStore{conn: sqliteDatabase}
 
-	_, err = sqliteDatabase.Exec(Schema)
+	_, err = sqliteDatabase.Exec(sqliteSchema)
 	if err != nil {
 		_ = sqliteDatabase.Close()
 		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
 
-	slog.Default().Info("database initialized", "file", filename)
+	slog.Default().Info("sqlite database initialized", "file", cfg.Path)
 	return db, nil
 }
 
 // SaveConversation saves the message history for a chat
-func (db *Database) SaveConversation(chatID int64, messages []conversation.Message) error {
+func (db *sqliteStore) SaveConversation(chatID int64, messages []conversation.Message) error {
 	jsonData, err := json.Marshal(messages)
 	if err != nil {
 		return fmt.Errorf("failed to marshal messages: %w", err)
@@ -97,7 +99,7 @@ func (db *Database) SaveConversation(chatID int64, messages []conversation.Messa
 }
 
 // LoadConversation loads the message history for a chat
-func (db *Database) LoadConversation(chatID int64) ([]conversation.Message, error) {
+func (db *sqliteStore) LoadConversation(chatID int64) ([]conversation.Message, error) {
 	var jsonData string
 	query := "SELECT messages FROM conversations WHERE chat_id = ?"
 
@@ -119,7 +121,7 @@ func (db *Database) LoadConversation(chatID int64) ([]conversation.Message, erro
 }
 
 // SaveUserContext saves personalized context for a user
-func (db *Database) SaveUserContext(chatID int64, context string) error {
+func (db *sqliteStore) SaveUserContext(chatID int64, context string) error {
 	query := `
 	INSERT INTO user_context (chat_id, context_data, updated_at)
 	VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -137,7 +139,7 @@ func (db *Database) SaveUserContext(chatID int64, context string) error {
 }
 
 // LoadUserContext loads personalized context for a user
-func (db *Database) LoadUserContext(chatID int64) (string, error) {
+func (db *sqliteStore) LoadUserContext(chatID int64) (string, error) {
 	var context string
 	query := "SELECT context_data FROM user_context WHERE chat_id = ?"
 
@@ -153,7 +155,7 @@ func (db *Database) LoadUserContext(chatID int64) (string, error) {
 }
 
 // ClearConversation deletes a chat's conversation history
-func (db *Database) ClearConversation(chatID int64) error {
+func (db *sqliteStore) ClearConversation(chatID int64) error {
 	query := "DELETE FROM conversations WHERE chat_id = ?"
 	_, err := db.conn.Exec(query, chatID)
 	if err != nil {
@@ -163,7 +165,7 @@ func (db *Database) ClearConversation(chatID int64) error {
 }
 
 // GetAllChats returns all chat IDs in the database
-func (db *Database) GetAllChats() ([]int64, error) {
+func (db *sqliteStore) GetAllChats() ([]int64, error) {
 	query := "SELECT DISTINCT chat_id FROM conversations"
 	rows, err := db.conn.Query(query)
 	if err != nil {
@@ -184,7 +186,7 @@ func (db *Database) GetAllChats() ([]int64, error) {
 }
 
 // Close closes the database connection.
-func (db *Database) Close() error {
+func (db *sqliteStore) Close() error {
 	if db.conn != nil {
 		return db.conn.Close()
 	}
@@ -192,7 +194,7 @@ func (db *Database) Close() error {
 }
 
 // ExportMemory exports all conversations to a JSON file (for backup)
-func (db *Database) ExportMemory(filename string) error {
+func (db *sqliteStore) ExportMemory(filename string) error {
 	type ConversationExport struct {
 		ChatID   int64                  `json:"chat_id"`
 		Messages []conversation.Message `json:"messages"`
@@ -235,15 +237,9 @@ func (db *Database) ExportMemory(filename string) error {
 	return nil
 }
 
-type TokenUsageSummary struct {
-	Requests         int64
-	PromptTokens     int64
-	CompletionTokens int64
-	TotalTokens      int64
-}
 
 // SaveTokenUsage records token counts for a request.
-func (db *Database) SaveTokenUsage(chatID, userID int64, usage providers.TokenUsage) error {
+func (db *sqliteStore) SaveTokenUsage(chatID, userID int64, usage providers.TokenUsage) error {
 	_, err := db.conn.Exec(`
 		INSERT INTO token_usage (
 			chat_id, user_id, prompt_tokens, completion_tokens, total_tokens
@@ -256,7 +252,7 @@ func (db *Database) SaveTokenUsage(chatID, userID int64, usage providers.TokenUs
 }
 
 // GetTokenUsage returns totals for one user in one chat.
-func (db *Database) GetTokenUsage(chatID, userID int64) (TokenUsageSummary, error) {
+func (db *sqliteStore) GetTokenUsage(chatID, userID int64) (TokenUsageSummary, error) {
 	var summary TokenUsageSummary
 	err := db.conn.QueryRow(`
 		SELECT
@@ -279,7 +275,7 @@ func (db *Database) GetTokenUsage(chatID, userID int64) (TokenUsageSummary, erro
 }
 
 // SaveChatModel persists the selected model for a chat.
-func (db *Database) SaveChatModel(chatID int64, provider, model string) error {
+func (db *sqliteStore) SaveChatModel(chatID int64, provider, model string) error {
 	_, err := db.conn.Exec(`
 		INSERT INTO chat_models (chat_id, provider, model, updated_at)
 		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -295,7 +291,7 @@ func (db *Database) SaveChatModel(chatID int64, provider, model string) error {
 }
 
 // LoadChatModel loads the selected model for a chat.
-func (db *Database) LoadChatModel(chatID int64) (providers.ModelID, bool) {
+func (db *sqliteStore) LoadChatModel(chatID int64) (providers.ModelID, bool) {
 	var provider, model string
 	err := db.conn.QueryRow(
 		"SELECT provider, model FROM chat_models WHERE chat_id = ?", chatID,

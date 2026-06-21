@@ -239,15 +239,26 @@ Before a request is sent, Omni reserves `max_reply_tokens` inside the active con
 
 ### 4.5: Database configuration
 
-`database.path` is required. A relative path is resolved from the directory containing the loaded YAML file.
+Omni uses a discriminated union pattern for database configurations. The `database.backend` field chooses which storage backend to load: `"sqlite"` or `"mysql"`.
 
 ```yaml
 database:
-  path: "data/omni.db"
+  backend: "sqlite" # "sqlite" or "mysql"
+  
+  sqlite:
+    path: "omni.db" # Required if backend is sqlite
+
+  mysql:
+    host: "127.0.0.1" # Required if backend is mysql
+    port: 3306        # Required if backend is mysql
+    user: "omni_user" # Required if backend is mysql
+    password: "supersecretpassword"
+    database: "omni"  # Required if backend is mysql
 ```
 
-The parent directory must already exist and be writable by the bot process.
+For SQLite (`database.sqlite.path`), a relative path is resolved from the directory containing the loaded YAML file. The parent directory must already exist and be writable by the bot process.
 
+> **Breaking Change:** Previous versions used `database.path` at the root of the database object. It is now properly scoped under `database.sqlite.path` via the `backend` selector.
 ### 4.6: Telegram access configuration
 
 | Field | Meaning |

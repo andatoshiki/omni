@@ -18,10 +18,10 @@ func TestTokenUsageIsAggregatedPerUserAndChat(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
-	if _, err := connection.Exec(Schema); err != nil {
+	if _, err := connection.Exec(sqliteSchema); err != nil {
 		t.Fatal(err)
 	}
-	database := &Database{conn: connection}
+	database := &sqliteStore{conn: connection}
 
 	for _, usage := range []providers.TokenUsage{
 		{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15},
@@ -53,10 +53,10 @@ func TestConversationStringContentRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
-	if _, err := connection.Exec(Schema); err != nil {
+	if _, err := connection.Exec(sqliteSchema); err != nil {
 		t.Fatal(err)
 	}
-	database := &Database{conn: connection}
+	database := &sqliteStore{conn: connection}
 	want := []conversation.Message{
 		{Role: providers.RoleUser, Content: "[User attached an image] describe this"},
 		{Role: providers.RoleAssistant, Content: "A test image."},

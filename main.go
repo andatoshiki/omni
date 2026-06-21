@@ -31,7 +31,7 @@ func main() {
 	}
 	logger.Info("providers loaded", "count", registry.Len(), "providers", strings.Join(registry.ProviderNames(), ","))
 
-	store, err := storage.Open(params.DatabasePath)
+	store, err := storage.Open(params.Database)
 	if err != nil {
 		logger.Error("failed to initialize database", "error", err)
 		os.Exit(1)

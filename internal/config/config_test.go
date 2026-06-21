@@ -33,8 +33,8 @@ telegram:
 	}
 
 	wantDatabasePath := filepath.Join(filepath.Dir(filename), DefaultDatabasePath)
-	if got.DatabasePath != wantDatabasePath {
-		t.Fatalf("DatabasePath = %q, want %q", got.DatabasePath, wantDatabasePath)
+	if got.Database.SQLite.Path != wantDatabasePath {
+		t.Fatalf("DatabasePath = %q, want %q", got.Database.SQLite.Path, wantDatabasePath)
 	}
 	if got.Temperature != 1.3 || got.MaxReplyTokens != 2048 || got.MaxContextTokens != 8192 || got.HistorySize != 4 {
 		t.Fatalf("defaults not applied: %+v", got)
@@ -64,7 +64,9 @@ providers:
     models:
       - name: deepseek-chat
 database:
-  path: data/omni.db
+  backend: "sqlite"
+  sqlite:
+    path: data/omni.db
 telegram:
   bot_token: 123:test
 `)
@@ -74,8 +76,8 @@ telegram:
 		t.Fatalf("Load() error = %v", err)
 	}
 	want := filepath.Join(filepath.Dir(filename), "data", "omni.db")
-	if got.DatabasePath != want {
-		t.Fatalf("DatabasePath = %q, want %q", got.DatabasePath, want)
+	if got.Database.SQLite.Path != want {
+		t.Fatalf("DatabasePath = %q, want %q", got.Database.SQLite.Path, want)
 	}
 }
 
@@ -87,14 +89,16 @@ providers:
     models:
       - name: deepseek-chat
 database:
-  path: ""
+  backend: "sqlite"
+  sqlite:
+    path: ""
 telegram:
   bot_token: 123:test
 `)
 
 	var got Params
 	err := got.Load(filename)
-	if err == nil || !strings.Contains(err.Error(), "database.path") {
+	if err == nil || !strings.Contains(err.Error(), "database.sqlite.path") {
 		t.Fatalf("Load() error = %v, want database path error", err)
 	}
 }
