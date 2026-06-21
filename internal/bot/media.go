@@ -44,7 +44,7 @@ func (c *CommandHandler) userMessage(ctx context.Context, input ChatInput) (conv
 
 	for _, msg := range msgs {
 		mediaMsg := msg
-		if len(mediaMsg.Photo) == 0 && mediaMsg.Voice == nil && mediaMsg.Audio == nil && mediaMsg.Video == nil && mediaMsg.VideoNote == nil {
+		if len(mediaMsg.Photo) == 0 && mediaMsg.Voice == nil && mediaMsg.Audio == nil && mediaMsg.Video == nil && mediaMsg.VideoNote == nil && mediaMsg.Document == nil {
 			if msg.ReplyToMessage != nil {
 				mediaMsg = msg.ReplyToMessage
 			}
@@ -116,6 +116,32 @@ func (c *CommandHandler) userMessage(ctx context.Context, input ChatInput) (conv
 			parts = append(parts, part)
 			mediaCount++
 			storedSummary = updateStoredSummary(storedSummary, "video note")
+			continue
+		}
+
+		if mediaMsg.Document != nil {
+			if mediaMsg.Document.FileSize > maxTelegramImageBytes {
+				return conversation.Message{}, "", fmt.Errorf("document exceeds 20 MB limit")
+			}
+			data, mime, err := c.downloadFile(ctx, mediaMsg.Document.FileID)
+			if err != nil {
+				return conversation.Message{}, "", err
+			}
+			if mime == "application/octet-stream" || mime == "" {
+				mime = mediaMsg.Document.MimeType
+			}
+
+			extractedText, err := extractTextFromDocument(mediaMsg.Document.FileName, mime, data)
+			if err != nil {
+				return conversation.Message{}, "", fmt.Errorf("could not extract text from document %q: %v", mediaMsg.Document.FileName, err)
+			}
+
+			parts = append(parts, providers.ChatContentPart{
+				Type: "text",
+				Text: fmt.Sprintf("[File: %s]\n```\n%s\n```\n", mediaMsg.Document.FileName, extractedText),
+			})
+			mediaCount++
+			storedSummary = updateStoredSummary(storedSummary, fmt.Sprintf("document: %s", mediaMsg.Document.FileName))
 			continue
 		}
 	}
