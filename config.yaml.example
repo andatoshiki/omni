@@ -7,7 +7,7 @@ providers:
     timeout: 30s  # optional timeout for API requests (e.g., 30s, 1m)
     models:
       - name: deepseek-chat
-        max_context_tokens: 65536  # optional; overrides chat.max_context_tokens
+        max_context_tokens: 65536  # optional; overrides global.max_context_tokens
         input_price: 0.27   # USD per 1M input tokens
         output_price: 1.10  # USD per 1M output tokens
       - name: deepseek-reasoner
@@ -30,7 +30,7 @@ providers:
 
   # Anthropic uses its native Messages API, not an OpenAI-compatible proxy.
   # Obtain an API key from the Anthropic Console. Anthropic temperatures must
-  # be between 0 and 1, so each model needs an override when chat.temperature
+  # be between 0 and 1, so each model needs an override when global.temperature
   # is greater than 1.
   # - name: anthropic
   #   type: anthropic
