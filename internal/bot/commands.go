@@ -18,6 +18,8 @@ import (
 
 type CommandHandlerFunc func(ctx context.Context, msg *models.Message)
 
+const MaxItemsPerPage = 10
+
 type Route struct {
 	Handler     CommandHandlerFunc
 	Description string
@@ -157,24 +159,12 @@ func (c *CommandHandler) Model(ctx context.Context, msg *models.Message) {
 		return
 	}
 
-	// Build inline keyboard
-	var rows [][]models.InlineKeyboardButton
-	for _, m := range allModels {
-		label := m.String()
-		if m.Provider == current.Provider && m.Model == current.Model {
-			label = "✅ " + label
-		}
-		rows = append(rows, []models.InlineKeyboardButton{
-			{Text: label, CallbackData: m.CallbackData()},
-		})
-	}
-
-	keyboard := models.InlineKeyboardMarkup{InlineKeyboard: rows}
+	text, keyboard := providerSelectionView(allModels, current, 0)
 
 	if msg.Chat.ID >= 0 {
-		_, _ = c.app.sendMessageWithKeyboard(ctx, msg.Chat.ID, "🤖 Select a model:", &keyboard)
+		_, _ = c.app.sendMessageWithKeyboard(ctx, msg.Chat.ID, text, &keyboard)
 	} else {
-		_, _ = c.app.sendReplyWithKeyboard(ctx, msg, "🤖 Select a model:", &keyboard)
+		_, _ = c.app.sendReplyWithKeyboard(ctx, msg, text, &keyboard)
 	}
 }
 

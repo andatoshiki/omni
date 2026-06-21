@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/andatoshiki/omni/internal/providers/platforms"
@@ -34,6 +35,14 @@ func (m ModelID) CallbackData() string {
 	return "m:" + m.Provider + ":" + m.Model
 }
 
+func ProviderPageCallbackData(page int) string {
+	return "p:" + strconv.Itoa(page)
+}
+
+func ModelListCallbackData(provider string, page int) string {
+	return "l:" + provider + ":" + strconv.Itoa(page)
+}
+
 func ParseModelCallback(data string) (ModelID, bool) {
 	if !strings.HasPrefix(data, "m:") {
 		return ModelID{}, false
@@ -43,4 +52,35 @@ func ParseModelCallback(data string) (ModelID, bool) {
 		return ModelID{}, false
 	}
 	return ModelID{Provider: parts[0], Model: parts[1]}, true
+}
+
+func ParseProviderPageCallback(data string) (int, bool) {
+	if !strings.HasPrefix(data, "p:") {
+		return 0, false
+	}
+	return parseCallbackPage(data[2:])
+}
+
+func ParseModelListCallback(data string) (string, int, bool) {
+	if !strings.HasPrefix(data, "l:") {
+		return "", 0, false
+	}
+	payload := data[2:]
+	separator := strings.LastIndexByte(payload, ':')
+	if separator <= 0 {
+		return "", 0, false
+	}
+	page, ok := parseCallbackPage(payload[separator+1:])
+	if !ok {
+		return "", 0, false
+	}
+	return payload[:separator], page, true
+}
+
+func parseCallbackPage(value string) (int, bool) {
+	page, err := strconv.Atoi(value)
+	if err != nil || page < 0 {
+		return 0, false
+	}
+	return page, true
 }
