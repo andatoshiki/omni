@@ -67,6 +67,7 @@ chat:
   max_reply_tokens: 2048
   max_context_tokens: 8192
   history_size: 4
+  sender_context: "groups"
 
 telegram:
   bot_token: ""
