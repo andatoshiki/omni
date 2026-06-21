@@ -15,6 +15,7 @@ Private conversations work like a normal direct message. In an allowed group, us
 - **Multiple AI providers:** Configure Anthropic, DeepSeek, Google, OpenAI, xAI (Grok), and custom OpenAI-compatible endpoints at the same time.
 - **Reliable sender attribution:** Transparently resolves Telegram sender identities and `@mentions` in group chats to help the AI model distinguish between different participants.
 - **Multimodal media:** Natively process images, audio, video, and voice notes (via Google Gemini) directly from Telegram.
+- **Document analysis:** Read and analyze text from PDF, DOCX, XLSX, and source code files sent as attachments.
 - **Per-model temperature:** Override the global temperature setting independently for each model in configuration.
 - **Group media extraction:** Reply to an existing photo, audio, or video message with `@botname` in a group chat to instantly process it.
 - **Unsupported-media protection:** Reject audio and video requests when the selected adapter cannot send that media instead of silently discarding attachments.
@@ -186,7 +187,7 @@ Default base endpoints are:
 
 Disabled providers remain in the YAML file but are not loaded into the runtime registry or model menu. At least one provider must be enabled.
 
-Anthropic uses its native Messages API and requires an Anthropic Console API key; it does not require a sign-in proxy. Its temperature range is `0` to `1`. When the global `chat.temperature` is above `1`, every enabled Anthropic model must set a valid model-level `temperature` override or configuration validation will stop startup.
+Anthropic uses its native Messages API and requires an Anthropic Console API key; it does not require a sign-in proxy. Its temperature range is `0` to `1`. When the global `global.temperature` is above `1`, every enabled Anthropic model must set a valid model-level `temperature` override or configuration validation will stop startup.
 
 ```yaml
 - name: anthropic
@@ -206,14 +207,15 @@ Each enabled provider must expose at least one model.
 | `name` | Yes | Model identifier sent to the provider API |
 | `input_price` | No | USD per one million prompt tokens |
 | `output_price` | No | USD per one million completion tokens |
-| `max_context_tokens` | No | Model-specific context limit; `0` inherits the global chat limit |
+| `max_reply_tokens` | No | Model-specific reply limit; `0` inherits the global limit |
+| `max_context_tokens` | No | Model-specific context limit; `0` inherits the global limit |
 | `temperature` | No | Model-specific override; `0` to `2` generally and `0` to `1` for Anthropic |
 
 The first model of the first enabled provider is the default. A selection made through `/model` is persisted per Telegram chat.
 
 Pricing values are informational. Omni uses them for `/usage` estimates and does not perform billing.
 
-### 4.4: Chat configuration
+### 4.4: Global configuration
 
 | Field | Default | Validation and behavior |
 | --- | --- | --- |
@@ -312,7 +314,15 @@ Omni downloads the largest available Telegram photo variant and sends it as an i
 
 Only a textual placeholder and optional caption are stored in conversation history; raw image bytes are not persisted in SQLite.
 
-### 5.4: Commands
+### 5.4: Document parsing
+
+Omni extracts text from document attachments natively and adds it to the prompt context. Supported formats include PDF, DOCX, XLSX, and standard text or code files (e.g., `.go`, `.py`, `.md`).
+
+- The maximum downloaded document size is 20 MiB.
+- In groups, start the document caption with `@your_bot_username` or reply to the bot.
+- The raw document is not saved to disk; text extraction happens entirely in memory.
+
+### 5.5: Commands
 
 | Command | Behavior |
 | --- | --- |
@@ -331,13 +341,13 @@ The router also recognizes `!` as a command prefix. Telegram privacy mode may no
 
 `/export` exports all stored chats, not only the current chat. The sender must be listed under `telegram.allowed_user_ids` or `telegram.admin_user_ids`, including when invoking the command from an allowed group.
 
-### 5.5: Streaming and long replies
+### 5.6: Streaming and long replies
 
 Omni sends a typing action and periodically edits a preview message while tokens arrive. Preview edits are rate-limited to approximately one second in private chats and three seconds in groups.
 
 Responses longer than the preview budget are sent in UTF-8-safe chunks. Omni prefers paragraph, newline, and word boundaries when splitting text.
 
-### 5.6: Formatting behavior
+### 5.7: Formatting behavior
 
 Model output is rendered through a Telegram-safe HTML conversion layer. Raw HTML is sanitized, supported Markdown is converted, and malformed formatted sends fall back to plain text.
 
