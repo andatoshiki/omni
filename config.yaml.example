@@ -106,6 +106,16 @@ providers:
   #   models:
   #     - name: mistral-large-latest
 
+  # Uncomment to add Amazon Bedrock support:
+  # - name: bedrock
+  #   type: bedrock
+  #   enabled: true
+  #   aws_region: "us-east-1" # required if not set in environment
+  #   aws_access_key: "AKIA..." # optional if using IAM roles
+  #   aws_secret_key: "..." # optional if using IAM roles
+  #   models:
+  #     - name: anthropic.claude-3-7-sonnet-20250219-v1:0
+
   - name: google
     type: google
     enabled: true

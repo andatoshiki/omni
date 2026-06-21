@@ -26,6 +26,7 @@ const (
 	ProviderTypeGroq       = "groq"
 	ProviderTypeTogether   = "together"
 	ProviderTypeMistral    = "mistral"
+	ProviderTypeBedrock    = "bedrock"
 	DefaultDatabasePath    = "omni.db"
 )
 
@@ -62,10 +63,13 @@ type ProviderConfig struct {
 	Name    string         `yaml:"name"`
 	Type    string         `yaml:"type"`
 	Enabled *bool          `yaml:"enabled"` // nil = true (default enabled)
-	APIKey  string         `yaml:"api_key"`
-	APIBase string         `yaml:"api_base"`
-	Timeout *time.Duration `yaml:"timeout"`
-	Models  []ModelConfig  `yaml:"models"`
+	APIKey       string         `yaml:"api_key"`
+	APIBase      string         `yaml:"api_base"`
+	AWSAccessKey string         `yaml:"aws_access_key"`
+	AWSSecretKey string         `yaml:"aws_secret_key"`
+	AWSRegion    string         `yaml:"aws_region"`
+	Timeout      *time.Duration `yaml:"timeout"`
+	Models       []ModelConfig  `yaml:"models"`
 }
 
 // IsEnabled returns whether the provider is enabled.
@@ -101,6 +105,8 @@ func (p ProviderConfig) EffectiveType() string {
 		return ProviderTypeTogether
 	case ProviderTypeMistral:
 		return ProviderTypeMistral
+	case ProviderTypeBedrock:
+		return ProviderTypeBedrock
 	default:
 		return ProviderTypeCustom
 	}
@@ -266,9 +272,9 @@ func (p *Params) validate() error {
 		providerNames[providerName] = i
 
 		switch prov.EffectiveType() {
-		case ProviderTypeDeepSeek, ProviderTypeOpenAI, ProviderTypeCustom, ProviderTypeGoogle, ProviderTypeAnthropic, ProviderTypeXAI, ProviderTypePerplexity, ProviderTypeOllama, ProviderTypeGroq, ProviderTypeTogether, ProviderTypeMistral:
+		case ProviderTypeDeepSeek, ProviderTypeOpenAI, ProviderTypeCustom, ProviderTypeGoogle, ProviderTypeAnthropic, ProviderTypeXAI, ProviderTypePerplexity, ProviderTypeOllama, ProviderTypeGroq, ProviderTypeTogether, ProviderTypeMistral, ProviderTypeBedrock:
 		default:
-			return fmt.Errorf("providers[%d].type must be one of deepseek, openai, custom, google, anthropic, xai, perplexity, ollama, groq, together, mistral (provider: %s)", i, providerName)
+			return fmt.Errorf("providers[%d].type must be one of deepseek, openai, custom, google, anthropic, xai, perplexity, ollama, groq, together, mistral, bedrock (provider: %s)", i, providerName)
 		}
 
 		if !prov.IsEnabled() {

@@ -6,11 +6,16 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 
 	"github.com/andatoshiki/omni/internal/config"
 	"github.com/andatoshiki/omni/internal/providers/platforms"
 	anthropicplatform "github.com/andatoshiki/omni/internal/providers/platforms/anthropic"
+	"github.com/andatoshiki/omni/internal/providers/platforms/bedrock"
 	customplatform "github.com/andatoshiki/omni/internal/providers/platforms/custom"
 	deepseekplatform "github.com/andatoshiki/omni/internal/providers/platforms/deepseek"
 	googleplatform "github.com/andatoshiki/omni/internal/providers/platforms/google"
@@ -68,7 +73,7 @@ func NewRegistry(configs []config.ProviderConfig) (*Registry, error) {
 		}
 
 		providerType := cfg.EffectiveType()
-		adapter, err := adapterForType(providerType, cfg.Timeout)
+		adapter, err := adapterForType(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("provider %q: %w", cfg.Name, err)
 		}
@@ -93,11 +98,12 @@ func NewRegistry(configs []config.ProviderConfig) (*Registry, error) {
 	return registry, nil
 }
 
-func adapterForType(providerType string, timeout *time.Duration) (Adapter, error) {
+func adapterForType(cfg config.ProviderConfig) (Adapter, error) {
+	providerType := cfg.EffectiveType()
 	var client *http.Client
-	if timeout != nil {
+	if cfg.Timeout != nil {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.ResponseHeaderTimeout = *timeout
+		transport.ResponseHeaderTimeout = *cfg.Timeout
 		client = &http.Client{Transport: transport}
 	}
 	switch providerType {
@@ -123,6 +129,29 @@ func adapterForType(providerType string, timeout *time.Duration) (Adapter, error
 		return openaiplatform.Adapter{HTTPClient: client}, nil
 	case config.ProviderTypeMistral:
 		return openaiplatform.Adapter{HTTPClient: client}, nil
+	case config.ProviderTypeBedrock:
+		ctx := context.Background()
+		var awsCfg aws.Config
+		var err error
+
+		if cfg.AWSAccessKey != "" && cfg.AWSSecretKey != "" {
+			awsCfg, err = awsconfig.LoadDefaultConfig(ctx,
+				awsconfig.WithRegion(cfg.AWSRegion),
+				awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AWSAccessKey, cfg.AWSSecretKey, "")),
+			)
+		} else {
+			awsCfg, err = awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.AWSRegion))
+		}
+		if err != nil {
+			return nil, fmt.Errorf("load bedrock aws config: %w", err)
+		}
+
+		if client != nil {
+			awsCfg.HTTPClient = client
+		}
+
+		bedrockClient := bedrockruntime.NewFromConfig(awsCfg)
+		return bedrock.Adapter{Client: bedrockClient}, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type %q", providerType)
 	}

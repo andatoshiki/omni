@@ -12,7 +12,7 @@ Private conversations work like a normal direct message. In an allowed group, us
 
 ### 1.2: Main features
 
-- **Multiple AI providers:** Configure Anthropic, DeepSeek, Google, Groq, Mistral, Ollama, OpenAI, Perplexity, Together AI, xAI (Grok), and custom OpenAI-compatible endpoints at the same time.
+- **Multiple AI providers:** Configure Amazon Bedrock, Anthropic, DeepSeek, Google, Groq, Mistral, Ollama, OpenAI, Perplexity, Together AI, xAI (Grok), and custom OpenAI-compatible endpoints at the same time.
 - **Reliable sender attribution:** Transparently resolves Telegram sender identities and `@mentions` in group chats to help the AI model distinguish between different participants.
 - **Multimodal media:** Natively process images, audio, video, and voice notes (via Google Gemini) directly from Telegram.
 - **Document analysis:** Read and analyze text from PDF, DOCX, XLSX, and source code files sent as attachments.
@@ -166,19 +166,23 @@ Each item under `providers` defines one independently named backend.
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `name` | Yes | Unique provider name displayed in model selection |
-| `type` | Recommended | `anthropic`, `deepseek`, `google`, `groq`, `mistral`, `ollama`, `openai`, `perplexity`, `together`, `xai`, or `custom` |
+| `type` | Recommended | `anthropic`, `bedrock`, `deepseek`, `google`, `groq`, `mistral`, `ollama`, `openai`, `perplexity`, `together`, `xai`, or `custom` |
 | `enabled` | No | Enables the provider; defaults to `true` when omitted |
 | `api_key` | Yes when enabled | Credential sent to the provider |
 | `api_base` | No | Base endpoint; an empty value uses the type's default |
+| `aws_region` | No | AWS Region for Bedrock (e.g. `us-east-1`); if omitted, falls back to environment |
+| `aws_access_key` | No | AWS Access Key for Bedrock; if omitted, falls back to environment/IAM |
+| `aws_secret_key` | No | AWS Secret Key for Bedrock; if omitted, falls back to environment/IAM |
 | `models` | Yes when enabled | Models available through `/model` |
 
-If `type` is omitted, a provider named `anthropic`, `deepseek`, `google`, `groq`, `mistral`, `ollama`, `openai`, `perplexity`, `together`, or `xai` inherits the matching type. Every other provider name defaults to `custom`.
+If `type` is omitted, a provider named `anthropic`, `bedrock`, `deepseek`, `google`, `groq`, `mistral`, `ollama`, `openai`, `perplexity`, `together`, or `xai` inherits the matching type. Every other provider name defaults to `custom`.
 
 Default base endpoints are:
 
 | Provider type | Default base endpoint |
 | --- | --- |
 | `anthropic` | `https://api.anthropic.com` |
+| `bedrock` | *(Uses AWS SDK regional endpoint)* |
 | `deepseek` | `https://api.deepseek.com` |
 | `google` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
 | `groq` | `https://api.groq.com/openai/v1` |
