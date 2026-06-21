@@ -214,6 +214,27 @@ telegram:
 	}
 }
 
+func TestParamsLoadXAIProvider(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: grok
+    type: xai
+    api_key: xai-test
+    models:
+      - name: grok-2-latest
+telegram:
+  bot_token: 123:test
+`)
+
+	var got Params
+	if err := got.Load(filename); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.Providers[0].EffectiveType() != ProviderTypeXAI {
+		t.Fatalf("EffectiveType() = %q, want xai", got.Providers[0].EffectiveType())
+	}
+}
+
 func TestParamsLoadRejectsAnthropicTemperatureAboveOne(t *testing.T) {
 	tests := []struct {
 		name        string
