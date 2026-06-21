@@ -6,7 +6,6 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/ledongthuc/pdf"
 	"github.com/nguyenthenguyen/docx"
@@ -98,9 +97,9 @@ func extractTextFromDocument(fileName string, mimeType string, data []byte) (str
 		checkLen = 1024
 	}
 	sample := data[:checkLen]
-	if utf8.Valid(sample) && !bytes.ContainsRune(sample, '\x00') {
-		// Valid UTF-8 string
-		return string(data), nil
+	if !bytes.Contains(sample, []byte{0}) {
+		// Clean the text of any invalid UTF-8 sequences and return
+		return strings.ToValidUTF8(string(data), ""), nil
 	}
 
 	return "", fmt.Errorf("unsupported document type or binary format")
