@@ -8,6 +8,8 @@ import (
 
 	telegram "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	
+	"github.com/andatoshiki/omni/internal/conversation"
 )
 
 func (a *App) handleMessage(ctx context.Context, update *models.Update) {
@@ -34,6 +36,14 @@ func (a *App) handleMessage(ctx context.Context, update *models.Update) {
 	a.processMessages(ctx, msg)
 }
 
+type ChatInput struct {
+	Messages []*models.Message
+	Prompt   string
+	Sender   *conversation.Speaker
+	Mentions []Mention
+	Reply    *conversation.ReplyContext
+}
+
 func (a *App) processMessages(ctx context.Context, msgs ...*models.Message) {
 	if len(msgs) == 0 {
 		return
@@ -55,15 +65,40 @@ func (a *App) processMessages(ctx context.Context, msgs ...*models.Message) {
 		a.routeCommand(ctx, msg)
 		return
 	}
+
+	sender := ExtractSpeaker(msg)
+	mentions := ExtractMentions(msg)
+	var reply *conversation.ReplyContext
+	if msg.ReplyToMessage != nil {
+		replySpeaker := ExtractSpeaker(msg.ReplyToMessage)
+		if replySpeaker != nil {
+			replyText := msg.ReplyToMessage.Text
+			if replyText == "" {
+				replyText = msg.ReplyToMessage.Caption
+			}
+			reply = &conversation.ReplyContext{Speaker: replySpeaker, Text: replyText}
+		}
+	}
+
 	if prompt, mentioned := stripBotMention(commandText, a.botUsername); mentioned {
-		msg.Text = prompt
-		msg.Caption = prompt
-		a.commands.Chat(ctx, msgs...)
+		a.commands.Chat(ctx, ChatInput{
+			Messages: msgs,
+			Prompt:   prompt,
+			Sender:   sender,
+			Mentions: mentions,
+			Reply:    reply,
+		})
 		return
 	}
 
 	if msg.Chat.ID >= 0 || replyTargetsBot(msg, a.client.ID()) {
-		a.commands.Chat(ctx, msgs...)
+		a.commands.Chat(ctx, ChatInput{
+			Messages: msgs,
+			Prompt:   commandText,
+			Sender:   sender,
+			Mentions: mentions,
+			Reply:    reply,
+		})
 	}
 }
 

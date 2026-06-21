@@ -6,6 +6,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/andatoshiki/omni/internal/conversation"
 	"github.com/andatoshiki/omni/internal/providers"
 )
 
@@ -56,7 +57,7 @@ func TestConversationStringContentRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	database := &Database{conn: connection}
-	want := []providers.ChatMessage{
+	want := []conversation.Message{
 		{Role: providers.RoleUser, Content: "[User attached an image] describe this"},
 		{Role: providers.RoleAssistant, Content: "A test image."},
 	}

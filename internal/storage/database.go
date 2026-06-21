@@ -9,6 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/andatoshiki/omni/internal/conversation"
 	"github.com/andatoshiki/omni/internal/providers"
 )
 
@@ -73,7 +74,7 @@ func Open(filename string) (*Database, error) {
 }
 
 // SaveConversation saves the message history for a chat
-func (db *Database) SaveConversation(chatID int64, messages []providers.ChatMessage) error {
+func (db *Database) SaveConversation(chatID int64, messages []conversation.Message) error {
 	jsonData, err := json.Marshal(messages)
 	if err != nil {
 		return fmt.Errorf("failed to marshal messages: %w", err)
@@ -96,19 +97,19 @@ func (db *Database) SaveConversation(chatID int64, messages []providers.ChatMess
 }
 
 // LoadConversation loads the message history for a chat
-func (db *Database) LoadConversation(chatID int64) ([]providers.ChatMessage, error) {
+func (db *Database) LoadConversation(chatID int64) ([]conversation.Message, error) {
 	var jsonData string
 	query := "SELECT messages FROM conversations WHERE chat_id = ?"
 
 	err := db.conn.QueryRow(query, chatID).Scan(&jsonData)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return []providers.ChatMessage{}, nil
+			return []conversation.Message{}, nil
 		}
 		return nil, fmt.Errorf("failed to load conversation: %w", err)
 	}
 
-	var messages []providers.ChatMessage
+	var messages []conversation.Message
 	err = json.Unmarshal([]byte(jsonData), &messages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal messages: %w", err)
@@ -193,9 +194,9 @@ func (db *Database) Close() error {
 // ExportMemory exports all conversations to a JSON file (for backup)
 func (db *Database) ExportMemory(filename string) error {
 	type ConversationExport struct {
-		ChatID   int64                   `json:"chat_id"`
-		Messages []providers.ChatMessage `json:"messages"`
-		Context  string                  `json:"context,omitempty"`
+		ChatID   int64                  `json:"chat_id"`
+		Messages []conversation.Message `json:"messages"`
+		Context  string                 `json:"context,omitempty"`
 	}
 
 	chatIDs, err := db.GetAllChats()

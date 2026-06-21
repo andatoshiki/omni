@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-telegram/bot/models"
 
+	"github.com/andatoshiki/omni/internal/conversation"
 	"github.com/andatoshiki/omni/internal/providers"
 )
 
@@ -17,11 +18,11 @@ const minReplyIntervalGroupChat = 3 * time.Second
 
 // Chat handles one AI conversation turn. Turns for the same Telegram chat are
 // serialized so their persisted histories cannot interleave.
-func (c *CommandHandler) Chat(ctx context.Context, msgs ...*models.Message) {
-	if len(msgs) == 0 {
+func (c *CommandHandler) Chat(ctx context.Context, input ChatInput) {
+	if len(input.Messages) == 0 {
 		return
 	}
-	msg := msgs[0]
+	msg := input.Messages[0]
 
 	requestStartedAt := time.Now()
 	chatID := msg.Chat.ID
@@ -33,7 +34,7 @@ func (c *CommandHandler) Chat(ctx context.Context, msgs ...*models.Message) {
 		userID = msg.From.ID
 	}
 
-	modelID, request, history, storedUserPrompt, err := c.prepareChatContext(ctx, chatID, msgs...)
+	modelID, request, history, storedUserPrompt, err := c.prepareChatContext(ctx, chatID, input)
 	if err != nil {
 		// Error logging and replying is handled inside prepareChatContext to maintain context
 		return
@@ -41,14 +42,14 @@ func (c *CommandHandler) Chat(ctx context.Context, msgs ...*models.Message) {
 
 	text, usage, streamErr := c.executeChatStream(ctx, msg, modelID, request, requestStartedAt)
 
-	c.finalizeChatTurn(chatID, userID, msg, history, storedUserPrompt, text, usage, streamErr)
+	c.finalizeChatTurn(chatID, userID, msg, input, history, storedUserPrompt, text, usage, streamErr)
 }
 
-func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, msgs ...*models.Message) (providers.ModelID, *providers.ChatCompletionStreamRequest, []providers.ChatMessage, string, error) {
-	msg := msgs[0]
-	var history []providers.ChatMessage
+func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, input ChatInput) (providers.ModelID, *providers.ChatCompletionStreamRequest, []conversation.Message, string, error) {
+	msg := input.Messages[0]
+	var history []conversation.Message
 	if stored, exists := c.msgHistory.Load(chatID); exists {
-		history = stored.([]providers.ChatMessage)
+		history = stored.([]conversation.Message)
 	} else {
 		loaded, err := c.app.store.LoadConversation(chatID)
 		if err != nil {
@@ -66,20 +67,14 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, m
 		return modelID, nil, nil, "", err
 	}
 
-	userMessage, storedUserPrompt, err := c.userMessage(ctx, msgs...)
+	userMessage, storedUserPrompt, err := c.userMessage(ctx, input)
 	if err != nil {
 		c.app.logger.Error("failed to prepare user message", append(c.app.messageLogAttrs(msg), "error", err)...)
 		_, _ = c.reply(ctx, msg, errorMessage(err))
 		return modelID, nil, nil, "", err
 	}
 
-	currentMessages := make([]providers.ChatMessage, 0, 2)
-	if msg.ReplyToMessage != nil {
-		currentMessages = append(currentMessages, providers.ChatMessage{
-			Role:    providers.RoleAssistant,
-			Content: msg.ReplyToMessage.Text,
-		})
-	}
+	currentMessages := make([]conversation.Message, 0, 1)
 	currentMessages = append(currentMessages, userMessage)
 	
 	maxContextTokens := c.app.params.MaxContextTokens
@@ -92,10 +87,19 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, m
 		initialPrompt = customPrompt
 	}
 
+	includeIdentity := false
+	if c.app.params.SenderContext == "all" || (c.app.params.SenderContext == "groups" && chatID < 0) {
+		includeIdentity = true
+		initialPrompt += "\n\n" + conversation.SystemInstruction
+	}
+
+	renderedHistory := conversation.Render(history, includeIdentity)
+	renderedCurrent := conversation.Render(currentMessages, includeIdentity)
+
 	requestMessages, promptTokens, droppedHistory, err := messagesWithinContext(
 		providers.ChatMessage{Role: providers.RoleSystem, Content: initialPrompt},
-		history,
-		currentMessages,
+		renderedHistory,
+		renderedCurrent,
 		maxContextTokens,
 		c.app.params.MaxReplyTokens,
 	)
@@ -173,7 +177,8 @@ func (c *CommandHandler) finalizeChatTurn(
 	chatID int64, 
 	userID int64, 
 	msg *models.Message, 
-	history []providers.ChatMessage, 
+	input ChatInput,
+	history []conversation.Message, 
 	storedUserPrompt string, 
 	text string, 
 	usage *providers.TokenUsage, 
@@ -183,7 +188,7 @@ func (c *CommandHandler) finalizeChatTurn(
 		return // Do not save history if it completely failed
 	}
 
-	history = appendTurnToHistory(history, msg, storedUserPrompt, text, c.app.params.HistorySize)
+	history = appendTurnToHistory(history, input, storedUserPrompt, text, c.app.params.HistorySize)
 	c.msgHistory.Store(chatID, history)
 	
 	if err := c.app.store.SaveConversation(chatID, history); err != nil {
@@ -292,16 +297,23 @@ func (c *CommandHandler) sendFinalChatReply(ctx context.Context, msg, replyMsg *
 	c.app.sendLongReply(ctx, msg, text)
 }
 
-func appendTurnToHistory(history []providers.ChatMessage, msg *models.Message, userPrompt, text string, maxMessages int) []providers.ChatMessage {
-	if msg.ReplyToMessage != nil {
-		history = append(history, providers.ChatMessage{
-			Role:    providers.RoleAssistant,
-			Content: msg.ReplyToMessage.Text,
+func appendTurnToHistory(history []conversation.Message, input ChatInput, userPrompt, text string, maxMessages int) []conversation.Message {
+	replyRole := providers.RoleAssistant
+	if input.Reply != nil && input.Reply.Speaker != nil && input.Messages[0] != nil {
+		if input.Reply.Speaker.UserID != 0 {
+			replyRole = providers.RoleUser
+		}
+	}
+	if input.Reply != nil && input.Reply.Text != "" {
+		history = append(history, conversation.Message{
+			Role:    replyRole,
+			Content: input.Reply.Text,
+			Speaker: input.Reply.Speaker,
 		})
 	}
 	history = append(history,
-		providers.ChatMessage{Role: providers.RoleUser, Content: userPrompt},
-		providers.ChatMessage{Role: providers.RoleAssistant, Content: text},
+		conversation.Message{Role: providers.RoleUser, Content: userPrompt, Speaker: input.Sender, ReplyTo: input.Reply},
+		conversation.Message{Role: providers.RoleAssistant, Content: text},
 	)
 	if len(history) > maxMessages {
 		return history[len(history)-maxMessages:]
