@@ -34,6 +34,7 @@ type Params struct {
 	MaxReplyTokens   int
 	MaxContextTokens int
 	HistorySize      int
+	SenderContext    string
 
 	AllowedUserIDs  []int64
 	AdminUserIDs    []int64
@@ -101,6 +102,7 @@ type chatConfig struct {
 	MaxReplyTokens   int     `yaml:"max_reply_tokens"`
 	MaxContextTokens int     `yaml:"max_context_tokens"`
 	HistorySize      int     `yaml:"history_size"`
+	SenderContext    string  `yaml:"sender_context"`
 }
 
 type telegramConfig struct {
@@ -152,6 +154,7 @@ func (p *Params) Load(filename string) error {
 			MaxReplyTokens:   2048,
 			MaxContextTokens: 8192,
 			HistorySize:      4,
+			SenderContext:    "groups",
 		},
 	}
 
@@ -177,6 +180,7 @@ func (p *Params) Load(filename string) error {
 		MaxReplyTokens:   cfg.Chat.MaxReplyTokens,
 		MaxContextTokens: cfg.Chat.MaxContextTokens,
 		HistorySize:      cfg.Chat.HistorySize,
+		SenderContext:    cfg.Chat.SenderContext,
 		AllowedUserIDs:   deduplicateIDs(cfg.Telegram.AllowedUserIDs),
 		AdminUserIDs:     deduplicateIDs(cfg.Telegram.AdminUserIDs),
 		AllowedGroupIDs:  deduplicateIDs(cfg.Telegram.AllowedGroupIDs),
@@ -301,6 +305,12 @@ func (p *Params) validate() error {
 	}
 	if p.HistorySize <= 0 {
 		return fmt.Errorf("chat.history_size must be greater than 0")
+	}
+	switch p.SenderContext {
+	case "off", "groups", "all":
+		// Valid
+	default:
+		return fmt.Errorf("chat.sender_context must be one of: off, groups, all")
 	}
 	return nil
 }

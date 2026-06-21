@@ -12,6 +12,7 @@ import (
 	telegram "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
+	"github.com/andatoshiki/omni/internal/conversation"
 	"github.com/andatoshiki/omni/internal/providers"
 )
 
@@ -19,16 +20,21 @@ const maxTelegramImageBytes = 20 << 20
 
 var telegramFileHTTPClient = &http.Client{Timeout: time.Minute}
 
-func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Message) (providers.ChatMessage, string, error) {
-	if len(msgs) == 0 {
-		return providers.ChatMessage{}, "", fmt.Errorf("no messages to process")
+func (c *CommandHandler) userMessage(ctx context.Context, input ChatInput) (conversation.Message, string, error) {
+	if len(input.Messages) == 0 {
+		return conversation.Message{}, "", fmt.Errorf("no messages to process")
 	}
 
-	prompt := msgs[0].Text
-	for _, m := range msgs {
-		if m.Caption != "" {
-			prompt = m.Caption
-			break
+	msgs := input.Messages
+	prompt := input.Prompt
+	
+	// Ensure prompt correctly updates if a caption is present and the original text was blank
+	if prompt == "" {
+		for _, m := range msgs {
+			if m.Caption != "" {
+				prompt = m.Caption
+				break
+			}
 		}
 	}
 
@@ -48,7 +54,7 @@ func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Messag
 			if photo, ok := largestPhoto(mediaMsg.Photo); ok {
 				part, err := c.processMediaItem(ctx, photo.FileID, "", "image")
 				if err != nil {
-					return providers.ChatMessage{}, "", err
+					return conversation.Message{}, "", err
 				}
 				parts = append(parts, part)
 				mediaCount++
@@ -59,11 +65,11 @@ func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Messag
 
 		if mediaMsg.Voice != nil {
 			if mediaMsg.Voice.FileSize > maxTelegramImageBytes {
-				return providers.ChatMessage{}, "", fmt.Errorf("voice note exceeds 20 MB limit")
+				return conversation.Message{}, "", fmt.Errorf("voice note exceeds 20 MB limit")
 			}
 			part, err := c.processMediaItem(ctx, mediaMsg.Voice.FileID, "audio/ogg", "audio")
 			if err != nil {
-				return providers.ChatMessage{}, "", err
+				return conversation.Message{}, "", err
 			}
 			parts = append(parts, part)
 			mediaCount++
@@ -73,11 +79,11 @@ func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Messag
 
 		if mediaMsg.Audio != nil {
 			if mediaMsg.Audio.FileSize > maxTelegramImageBytes {
-				return providers.ChatMessage{}, "", fmt.Errorf("audio file exceeds 20 MB limit")
+				return conversation.Message{}, "", fmt.Errorf("audio file exceeds 20 MB limit")
 			}
 			part, err := c.processMediaItem(ctx, mediaMsg.Audio.FileID, "audio/mpeg", "audio")
 			if err != nil {
-				return providers.ChatMessage{}, "", err
+				return conversation.Message{}, "", err
 			}
 			parts = append(parts, part)
 			mediaCount++
@@ -87,11 +93,11 @@ func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Messag
 
 		if mediaMsg.Video != nil {
 			if mediaMsg.Video.FileSize > maxTelegramImageBytes {
-				return providers.ChatMessage{}, "", fmt.Errorf("video exceeds 20 MB limit")
+				return conversation.Message{}, "", fmt.Errorf("video exceeds 20 MB limit")
 			}
 			part, err := c.processMediaItem(ctx, mediaMsg.Video.FileID, "video/mp4", "video")
 			if err != nil {
-				return providers.ChatMessage{}, "", err
+				return conversation.Message{}, "", err
 			}
 			parts = append(parts, part)
 			mediaCount++
@@ -101,11 +107,11 @@ func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Messag
 
 		if mediaMsg.VideoNote != nil {
 			if mediaMsg.VideoNote.FileSize > maxTelegramImageBytes {
-				return providers.ChatMessage{}, "", fmt.Errorf("video note exceeds 20 MB limit")
+				return conversation.Message{}, "", fmt.Errorf("video note exceeds 20 MB limit")
 			}
 			part, err := c.processMediaItem(ctx, mediaMsg.VideoNote.FileID, "video/mp4", "video")
 			if err != nil {
-				return providers.ChatMessage{}, "", err
+				return conversation.Message{}, "", err
 			}
 			parts = append(parts, part)
 			mediaCount++
@@ -115,7 +121,7 @@ func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Messag
 	}
 
 	if mediaCount == 0 {
-		return providers.ChatMessage{Role: providers.RoleUser, Content: prompt}, prompt, nil
+		return conversation.Message{Role: providers.RoleUser, Content: prompt, Speaker: input.Sender, ReplyTo: input.Reply}, prompt, nil
 	}
 
 	caption := strings.TrimSpace(prompt)
@@ -128,7 +134,7 @@ func (c *CommandHandler) userMessage(ctx context.Context, msgs ...*models.Messag
 	finalParts := []providers.ChatContentPart{{Type: "text", Text: prompt}}
 	finalParts = append(finalParts, parts...)
 
-	return providers.ChatMessage{Role: providers.RoleUser, Content: finalParts}, storedSummary, nil
+	return conversation.Message{Role: providers.RoleUser, Content: finalParts, Speaker: input.Sender, ReplyTo: input.Reply}, storedSummary, nil
 }
 
 func updateStoredSummary(current, mediaType string) string {
