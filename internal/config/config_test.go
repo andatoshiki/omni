@@ -18,7 +18,7 @@ providers:
         max_context_tokens: 12000
         input_price: 0.27
         output_price: 1.10
-chat:
+global:
   initial_prompt: Be concise.
 telegram:
   bot_token: 123:test
@@ -106,7 +106,7 @@ providers:
     api_key: sk-test
     models:
       - name: deepseek-chat
-chat:
+global:
   max_reply_tokens: 2048
   max_context_tokens: 2048
 telegram:
@@ -254,7 +254,7 @@ providers:
     models:
       - name: claude-test
 `+tt.temperature+`
-chat:
+global:
   temperature: 1.3
 telegram:
   bot_token: 123:test
@@ -325,7 +325,7 @@ providers:
     api_key: sk-test
     models:
       - name: deepseek-chat
-chat:
+global:
   history_size: 0
 telegram:
   bot_token: 123:test
