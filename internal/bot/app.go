@@ -23,10 +23,10 @@ var pollingAllowedUpdates = telegram.AllowedUpdates{"message", "callback_query"}
 
 // App owns the bot's runtime dependencies and Telegram handlers.
 type App struct {
-	client      *telegram.Bot
-	params      *config.Params
-	store       *storage.Database
-	providers   *providers.Registry
+	client          *telegram.Bot
+	params          *config.Params
+	store           *storage.Database
+	providers       *providers.Registry
 	logger          *slog.Logger
 	commands        *CommandHandler
 	mediaAggregator *Aggregator

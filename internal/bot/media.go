@@ -146,7 +146,7 @@ func (c *CommandHandler) processMediaItem(ctx context.Context, fileID string, fa
 	if mime == "application/octet-stream" || mime == "" {
 		mime = fallbackMime
 	}
-	
+
 	if typePrefix == "image" {
 		if !strings.HasPrefix(mime, "image/") {
 			return providers.ChatContentPart{}, fmt.Errorf("downloaded photo has unsupported media type %q", mime)

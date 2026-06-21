@@ -106,7 +106,7 @@ func (a Adapter) CreateChatCompletionStream(
 	}
 
 	stream := client.Models.GenerateContentStream(streamCtx, request.Model, contents, config)
-	
+
 	bridge := &geminiStream{
 		ch:     make(chan streamChunk, 100),
 		cancel: cancel,
@@ -155,9 +155,9 @@ func (s *geminiStream) run(ctx context.Context, iter func(func(*genai.GenerateCo
 			s.ch <- streamChunk{err: err}
 			return false
 		}
-		
+
 		chunk := &platforms.ChatCompletionStreamResponse{}
-		
+
 		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
 			if textPart := resp.Candidates[0].Content.Parts[0].Text; textPart != "" {
 				chunk.Choices = []platforms.StreamChoice{

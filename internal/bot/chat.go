@@ -81,7 +81,7 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, m
 		})
 	}
 	currentMessages = append(currentMessages, userMessage)
-	
+
 	maxContextTokens := c.app.params.MaxContextTokens
 	if model := c.app.providers.LookupModelConfig(modelID); model != nil && model.MaxContextTokens > 0 {
 		maxContextTokens = model.MaxContextTokens
@@ -134,10 +134,10 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, m
 }
 
 func (c *CommandHandler) executeChatStream(
-	ctx context.Context, 
-	msg *models.Message, 
-	modelID providers.ModelID, 
-	request *providers.ChatCompletionStreamRequest, 
+	ctx context.Context,
+	msg *models.Message,
+	modelID providers.ModelID,
+	request *providers.ChatCompletionStreamRequest,
 	requestStartedAt time.Time,
 ) (string, *providers.TokenUsage, error) {
 	stream, err := c.app.providers.CreateChatCompletionStream(ctx, modelID, request)
@@ -170,13 +170,13 @@ func (c *CommandHandler) executeChatStream(
 }
 
 func (c *CommandHandler) finalizeChatTurn(
-	chatID int64, 
-	userID int64, 
-	msg *models.Message, 
-	history []providers.ChatMessage, 
-	storedUserPrompt string, 
-	text string, 
-	usage *providers.TokenUsage, 
+	chatID int64,
+	userID int64,
+	msg *models.Message,
+	history []providers.ChatMessage,
+	storedUserPrompt string,
+	text string,
+	usage *providers.TokenUsage,
 	streamErr error,
 ) {
 	if text == "" && streamErr != nil {
@@ -185,11 +185,11 @@ func (c *CommandHandler) finalizeChatTurn(
 
 	history = appendTurnToHistory(history, msg, storedUserPrompt, text, c.app.params.HistorySize)
 	c.msgHistory.Store(chatID, history)
-	
+
 	if err := c.app.store.SaveConversation(chatID, history); err != nil {
 		c.app.logger.Warn("failed to save conversation to database", append(c.app.messageLogAttrs(msg), "history_messages", len(history), "error", err)...)
 	}
-	
+
 	if usage != nil {
 		if err := c.app.store.SaveTokenUsage(chatID, userID, *usage); err != nil {
 			c.app.logger.Warn("failed to save token usage", append(c.app.messageLogAttrs(msg), "error", err)...)
