@@ -19,9 +19,10 @@ const (
 	ProviderTypeOpenAI    = "openai"
 	ProviderTypeCustom    = "custom"
 	ProviderTypeGoogle    = "google"
-	ProviderTypeAnthropic = "anthropic"
-	ProviderTypeXAI       = "xai"
-	DefaultDatabasePath   = "omni.db"
+	ProviderTypeAnthropic  = "anthropic"
+	ProviderTypeXAI        = "xai"
+	ProviderTypePerplexity = "perplexity"
+	DefaultDatabasePath    = "omni.db"
 )
 
 type Params struct {
@@ -86,6 +87,8 @@ func (p ProviderConfig) EffectiveType() string {
 		return ProviderTypeAnthropic
 	case ProviderTypeXAI:
 		return ProviderTypeXAI
+	case ProviderTypePerplexity:
+		return ProviderTypePerplexity
 	default:
 		return ProviderTypeCustom
 	}

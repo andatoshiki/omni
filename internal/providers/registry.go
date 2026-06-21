@@ -44,9 +44,10 @@ var defaultBaseURLs = map[string]string{
 	config.ProviderTypeDeepSeek:  "https://api.deepseek.com",
 	config.ProviderTypeOpenAI:    "https://api.openai.com/v1",
 	config.ProviderTypeCustom:    "https://api.openai.com/v1",
-	config.ProviderTypeGoogle:    "https://generativelanguage.googleapis.com/v1beta/openai/",
-	config.ProviderTypeAnthropic: "https://api.anthropic.com",
-	config.ProviderTypeXAI:       "https://api.x.ai/v1",
+	config.ProviderTypeGoogle:     "https://generativelanguage.googleapis.com/v1beta/openai/",
+	config.ProviderTypeAnthropic:  "https://api.anthropic.com",
+	config.ProviderTypeXAI:        "https://api.x.ai/v1",
+	config.ProviderTypePerplexity: "https://api.perplexity.ai",
 }
 
 // NewRegistry initializes the provider registry from config.
@@ -106,6 +107,8 @@ func adapterForType(providerType string, timeout *time.Duration) (Adapter, error
 		return anthropicplatform.Adapter{HTTPClient: client}, nil
 	case config.ProviderTypeXAI:
 		return xaiplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
+	case config.ProviderTypePerplexity:
+		return openaiplatform.Adapter{HTTPClient: client}, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type %q", providerType)
 	}
