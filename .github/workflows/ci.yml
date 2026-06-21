@@ -62,7 +62,7 @@ jobs:
         run: go build -v -o omni .
 
   docker-test-build:
-    name: Docker Build Test
+    name: Docker
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
