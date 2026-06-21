@@ -4,8 +4,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/go-telegram/bot/models"
 	"github.com/andatoshiki/omni/internal/conversation"
+	"github.com/go-telegram/bot/models"
 )
 
 // ExtractSpeaker creates a Speaker object from a Telegram message sender.

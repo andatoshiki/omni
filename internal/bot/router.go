@@ -8,7 +8,7 @@ import (
 
 	telegram "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
-	
+
 	"github.com/andatoshiki/omni/internal/conversation"
 )
 

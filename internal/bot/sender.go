@@ -206,8 +206,6 @@ func (a *App) sendChatActionTyping(ctx context.Context, msg *models.Message) {
 	}
 }
 
-
-
 func (a *App) textMetricAttrs(prefix, text string) []any {
 	return logging.TextMetricAttrs(prefix, text)
 }

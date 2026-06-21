@@ -27,7 +27,7 @@ func (c *CommandHandler) userMessage(ctx context.Context, input ChatInput) (conv
 
 	msgs := input.Messages
 	prompt := input.Prompt
-	
+
 	// Ensure prompt correctly updates if a caption is present and the original text was blank
 	if prompt == "" {
 		for _, m := range msgs {

@@ -35,8 +35,6 @@ func countTokens(text string) (int, error) {
 	return len(encoding.EncodeOrdinary(text)), nil
 }
 
-
-
 func countChatMessageTokensWith(message providers.ChatMessage, counter textTokenCounter) (int, error) {
 	roleTokens, err := counter(message.Role)
 	if err != nil {
@@ -48,8 +46,6 @@ func countChatMessageTokensWith(message providers.ChatMessage, counter textToken
 	}
 	return chatMessageTokenOverhead + roleTokens + contentTokens, nil
 }
-
-
 
 func countContentTokensWith(content any, counter textTokenCounter) (int, error) {
 	switch value := content.(type) {

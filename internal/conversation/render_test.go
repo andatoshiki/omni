@@ -19,7 +19,7 @@ func TestRender(t *testing.T) {
 	}
 
 	msg3 := Message{
-		Role:    providers.RoleUser,
+		Role: providers.RoleUser,
 		Content: []providers.ChatContentPart{
 			{Type: "image_url"},
 		},
@@ -28,7 +28,7 @@ func TestRender(t *testing.T) {
 	}
 
 	msg4 := Message{
-		Role:    providers.RoleUser,
+		Role: providers.RoleUser,
 		Content: []providers.ChatContentPart{
 			{Type: "image_url"},
 			{Type: "text", Text: "Look at this"},
