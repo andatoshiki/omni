@@ -6,13 +6,13 @@
 
 ### 1.1: What Omni does
 
-Omni connects a Telegram bot to Anthropic, DeepSeek, Google, OpenAI, or another OpenAI-compatible chat completion API. It keeps each Telegram chat isolated, remembers recent conversation history, streams model output back into Telegram, and stores operational state in a local SQLite database.
+Omni connects a Telegram bot to Anthropic, Azure, Cloudflare, DeepSeek, Google, OpenAI, or another OpenAI-compatible chat completion API. It keeps each Telegram chat isolated, remembers recent conversation history, streams model output back into Telegram, and stores operational state in a local SQLite database.
 
 Private conversations work like a normal direct message. In an allowed group, users start a message with the bot's username, such as `@your_bot_username Explain this code`, or reply to one of the bot's messages. Omni removes its own username before sending the prompt to the selected model.
 
 ### 1.2: Main features
 
-- **Multiple AI providers:** Configure Amazon Bedrock, Anthropic, DeepSeek, Google, Groq, Mistral, Ollama, OpenAI, Perplexity, Together AI, xAI (Grok), and custom OpenAI-compatible endpoints at the same time.
+- **Multiple AI providers:** Configure Amazon Bedrock, Anthropic, Azure, Cloudflare, DeepSeek, Google, Groq, Mistral, Ollama, OpenAI, Perplexity, Together AI, xAI (Grok), and custom OpenAI-compatible endpoints at the same time.
 - **Reliable sender attribution:** Transparently resolves Telegram sender identities and `@mentions` in group chats to help the AI model distinguish between different participants.
 - **Multimodal media:** Natively process images, audio, video, and voice notes (via Google Gemini) directly from Telegram.
 - **Document analysis:** Read and analyze text from PDF, DOCX, XLSX, and source code files sent as attachments.
