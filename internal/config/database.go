@@ -23,7 +23,7 @@ type MySQLConfig struct {
 	Port     int    `yaml:"port"`
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
-	Database string `yaml:"database"`
+	DBName   string `yaml:"db_name"`
 }
 
 type PostgresConfig struct {
@@ -31,6 +31,6 @@ type PostgresConfig struct {
 	Port     int    `yaml:"port"`
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
-	Database string `yaml:"database"`
+	DBName   string `yaml:"db_name"`
 	SSLMode  string `yaml:"sslmode"`
 }
