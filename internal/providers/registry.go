@@ -25,6 +25,8 @@ import (
 	openaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/openai"
 	togetherplatform "github.com/andatoshiki/omni/internal/providers/platforms/together"
 	xaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/xai"
+	azureplatform "github.com/andatoshiki/omni/internal/providers/platforms/azureopenai"
+	cloudflareplatform "github.com/andatoshiki/omni/internal/providers/platforms/cloudflare"
 )
 
 // Provider holds the runtime configuration for a single AI provider.
@@ -61,6 +63,8 @@ var defaultBaseURLs = map[string]string{
 	config.ProviderTypeGroq:       "https://api.groq.com/openai/v1",
 	config.ProviderTypeTogether:   "https://api.together.xyz/v1",
 	config.ProviderTypeMistral:    "https://api.mistral.ai/v1",
+	config.ProviderTypeAzure:      "https://%s.openai.azure.com",
+	config.ProviderTypeCloudflare: "https://api.cloudflare.com/client/v4/accounts/%s/ai/run",
 }
 
 // NewRegistry initializes the provider registry from config.
@@ -156,6 +160,10 @@ func adapterForType(cfg config.ProviderConfig) (Adapter, error) {
 
 		bedrockClient := bedrockruntime.NewFromConfig(awsCfg)
 		return bedrock.Adapter{Client: bedrockClient}, nil
+	case config.ProviderTypeAzure:
+		return azureplatform.Adapter{APIVersion: cfg.APIVersion, HTTPClient: client}, nil
+	case config.ProviderTypeCloudflare:
+		return cloudflareplatform.Adapter{AccountID: cfg.CloudflareAccountID, HTTPClient: client}, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type %q", providerType)
 	}

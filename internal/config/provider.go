@@ -18,6 +18,8 @@ const (
 	ProviderTypeTogether   = "together"
 	ProviderTypeMistral    = "mistral"
 	ProviderTypeBedrock    = "bedrock"
+	ProviderTypeAzure      = "azure"
+	ProviderTypeCloudflare = "cloudflare"
 )
 
 type ProviderConfig struct {
@@ -28,9 +30,11 @@ type ProviderConfig struct {
 	APIBase      string         `yaml:"api_base"`
 	AWSAccessKey string         `yaml:"aws_access_key"`
 	AWSSecretKey string         `yaml:"aws_secret_key"`
-	AWSRegion    string         `yaml:"aws_region"`
-	Timeout      *time.Duration `yaml:"timeout"`
-	Models       []ModelConfig  `yaml:"models"`
+	AWSRegion           string         `yaml:"aws_region"`
+	APIVersion          string         `yaml:"api_version"`
+	CloudflareAccountID string         `yaml:"cloudflare_account_id"`
+	Timeout             *time.Duration `yaml:"timeout"`
+	Models              []ModelConfig  `yaml:"models"`
 }
 
 // IsEnabled returns whether the provider is enabled.
@@ -68,6 +72,10 @@ func (p ProviderConfig) EffectiveType() string {
 		return ProviderTypeMistral
 	case ProviderTypeBedrock:
 		return ProviderTypeBedrock
+	case ProviderTypeAzure:
+		return ProviderTypeAzure
+	case ProviderTypeCloudflare:
+		return ProviderTypeCloudflare
 	default:
 		return ProviderTypeCustom
 	}
