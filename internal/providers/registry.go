@@ -19,7 +19,11 @@ import (
 	customplatform "github.com/andatoshiki/omni/internal/providers/platforms/custom"
 	deepseekplatform "github.com/andatoshiki/omni/internal/providers/platforms/deepseek"
 	googleplatform "github.com/andatoshiki/omni/internal/providers/platforms/google"
+	groqplatform "github.com/andatoshiki/omni/internal/providers/platforms/groq"
+	mistralplatform "github.com/andatoshiki/omni/internal/providers/platforms/mistral"
+	ollamaplatform "github.com/andatoshiki/omni/internal/providers/platforms/ollama"
 	openaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/openai"
+	togetherplatform "github.com/andatoshiki/omni/internal/providers/platforms/together"
 	xaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/xai"
 )
 
@@ -122,13 +126,13 @@ func adapterForType(cfg config.ProviderConfig) (Adapter, error) {
 	case config.ProviderTypePerplexity:
 		return openaiplatform.Adapter{HTTPClient: client}, nil
 	case config.ProviderTypeOllama:
-		return openaiplatform.Adapter{HTTPClient: client}, nil
+		return ollamaplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypeGroq:
-		return openaiplatform.Adapter{HTTPClient: client}, nil
+		return groqplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypeTogether:
-		return openaiplatform.Adapter{HTTPClient: client}, nil
+		return togetherplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypeMistral:
-		return openaiplatform.Adapter{HTTPClient: client}, nil
+		return mistralplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypeBedrock:
 		ctx := context.Background()
 		var awsCfg aws.Config
