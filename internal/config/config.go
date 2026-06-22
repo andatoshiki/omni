@@ -33,8 +33,8 @@ const (
 type Params struct {
 	Providers []ProviderConfig
 
-	BotToken     string
-	DatabasePath string
+	BotToken string
+	Database DatabaseConfig
 
 	InitialPrompt    string
 	Temperature      float64
@@ -56,7 +56,27 @@ type configFile struct {
 }
 
 type databaseConfig struct {
+	Backend string       `yaml:"backend"`
+	SQLite  SQLiteConfig `yaml:"sqlite"`
+	MySQL   MySQLConfig  `yaml:"mysql"`
+}
+
+type DatabaseConfig struct {
+	Backend string
+	SQLite  SQLiteConfig
+	MySQL   MySQLConfig
+}
+
+type SQLiteConfig struct {
 	Path string `yaml:"path"`
+}
+
+type MySQLConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Database string `yaml:"database"`
 }
 
 type ProviderConfig struct {
@@ -172,7 +192,10 @@ func (p *Params) Load(filename string) error {
 
 	cfg := configFile{
 		Database: databaseConfig{
-			Path: DefaultDatabasePath,
+			Backend: "sqlite",
+			SQLite: SQLiteConfig{
+				Path: DefaultDatabasePath,
+			},
 		},
 		Global: globalConfig{
 			Temperature:      1.3,
@@ -191,15 +214,26 @@ func (p *Params) Load(filename string) error {
 	if err := rejectAdditionalYAMLDocuments(decoder, filename); err != nil {
 		return err
 	}
-
-	databasePath, err := resolveDatabasePath(filename, cfg.Database.Path)
-	if err != nil {
-		return err
+	if cfg.Database.Backend == "" {
+		cfg.Database.Backend = "sqlite"
 	}
+
+	var databaseConfigOut DatabaseConfig
+	databaseConfigOut.Backend = cfg.Database.Backend
+	databaseConfigOut.MySQL = cfg.Database.MySQL
+
+	if databaseConfigOut.Backend == "sqlite" {
+		databasePath, err := resolveDatabasePath(filename, cfg.Database.SQLite.Path)
+		if err != nil {
+			return err
+		}
+		databaseConfigOut.SQLite.Path = databasePath
+	}
+
 	*p = Params{
 		Providers:        cfg.Providers,
 		BotToken:         strings.TrimSpace(cfg.Telegram.BotToken),
-		DatabasePath:     databasePath,
+		Database:         databaseConfigOut,
 		InitialPrompt:    cfg.Global.InitialPrompt,
 		Temperature:      cfg.Global.Temperature,
 		MaxReplyTokens:   cfg.Global.MaxReplyTokens,
@@ -328,8 +362,8 @@ func (p *Params) validate() error {
 	if p.BotToken == "" {
 		return fmt.Errorf("telegram.bot_token is required")
 	}
-	if p.DatabasePath == "" {
-		return fmt.Errorf("database.path is required")
+	if p.Database.Backend == "sqlite" && p.Database.SQLite.Path == "" {
+		return fmt.Errorf("database.sqlite.path is required")
 	}
 	if p.Temperature < 0 || p.Temperature > 2 {
 		return fmt.Errorf("global.temperature must be between 0 and 2")

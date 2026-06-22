@@ -25,7 +25,7 @@ var pollingAllowedUpdates = telegram.AllowedUpdates{"message", "callback_query"}
 type App struct {
 	client          *telegram.Bot
 	params          *config.Params
-	store           *storage.Database
+	store           storage.Store
 	providers       *providers.Registry
 	logger          *slog.Logger
 	commands        *CommandHandler
@@ -35,7 +35,7 @@ type App struct {
 
 func New(
 	params *config.Params,
-	store *storage.Database,
+	store storage.Store,
 	registry *providers.Registry,
 	logger *slog.Logger,
 ) (*App, error) {
