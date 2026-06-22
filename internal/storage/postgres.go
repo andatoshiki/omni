@@ -62,7 +62,7 @@ func newPostgresStore(cfg config.PostgresConfig) (Store, error) {
 	}
 
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, sslmode)
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, sslmode)
 
 	postgresDatabase, err := sql.Open("postgres", dsn)
 	if err != nil {
@@ -77,7 +77,7 @@ func newPostgresStore(cfg config.PostgresConfig) (Store, error) {
 		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
 
-	slog.Default().Info("postgres database initialized", "host", cfg.Host, "db", cfg.Database)
+	slog.Default().Info("postgres database initialized", "host", cfg.Host, "db", cfg.DBName)
 	return db, nil
 }
 

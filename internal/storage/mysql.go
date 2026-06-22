@@ -61,7 +61,7 @@ func newMySQLStore(cfg config.MySQLConfig) (Store, error) {
 	mysqlConfig.Passwd = cfg.Password
 	mysqlConfig.Net = "tcp"
 	mysqlConfig.Addr = fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	mysqlConfig.DBName = cfg.Database
+	mysqlConfig.DBName = cfg.DBName
 	mysqlConfig.ParseTime = true
 
 	dsn := mysqlConfig.FormatDSN()
@@ -89,7 +89,7 @@ func newMySQLStore(cfg config.MySQLConfig) (Store, error) {
 		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
 
-	slog.Default().Info("mysql database initialized", "host", cfg.Host, "db", cfg.Database)
+	slog.Default().Info("mysql database initialized", "host", cfg.Host, "db", cfg.DBName)
 	return db, nil
 }
 

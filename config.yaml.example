@@ -141,7 +141,7 @@ database:
   #   port: 3306
   #   user: "omni_user"
   #   password: "supersecretpassword"
-  #   database: "omni"
+  #   db_name: "omni"
 
 global:
   initial_prompt: >-

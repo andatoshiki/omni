@@ -253,7 +253,7 @@ database:
     port: 3306        # Required if backend is mysql
     user: "omni_user" # Required if backend is mysql
     password: "supersecretpassword"
-    database: "omni"  # Required if backend is mysql
+    db_name: "omni"   # Required if backend is mysql
 ```
 
 For SQLite (`database.sqlite.path`), a relative path is resolved from the directory containing the loaded YAML file. The parent directory must already exist and be writable by the bot process.
