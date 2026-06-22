@@ -112,12 +112,17 @@ func modelSelectionView(allModels []providers.ModelID, current providers.ModelID
 
 	pageItems, page := paginate(providerModels, page)
 	rows := make([][]models.InlineKeyboardButton, 0, len(pageItems)+2)
-	for _, modelID := range pageItems {
-		label := modelID.Model
-		if modelID == current {
-			label = "✅ " + label
+	for i := 0; i < len(pageItems); i += 2 {
+		row := make([]models.InlineKeyboardButton, 0, 2)
+		for j := 0; j < 2 && i+j < len(pageItems); j++ {
+			modelID := pageItems[i+j]
+			label := modelID.Model
+			if modelID == current {
+				label = "✅ " + label
+			}
+			row = append(row, models.InlineKeyboardButton{Text: label, CallbackData: modelID.CallbackData()})
 		}
-		rows = append(rows, []models.InlineKeyboardButton{{Text: label, CallbackData: modelID.CallbackData()}})
+		rows = append(rows, row)
 	}
 	rows = appendNavigationRow(rows, page, len(providerModels), func(targetPage int) string {
 		return providers.ModelListCallbackData(provider, targetPage)
