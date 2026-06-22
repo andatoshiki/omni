@@ -38,6 +38,8 @@ func Open(cfg config.DatabaseConfig) (Store, error) {
 		return newSQLiteStore(cfg.SQLite)
 	case "mysql":
 		return newMySQLStore(cfg.MySQL)
+	case "postgres":
+		return newPostgresStore(cfg.Postgres)
 	default:
 		return nil, fmt.Errorf("unsupported database backend: %s", cfg.Backend)
 	}

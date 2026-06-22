@@ -106,6 +106,7 @@ func (p *Params) Load(filename string) error {
 	var databaseConfigOut DatabaseConfig
 	databaseConfigOut.Backend = cfg.Database.Backend
 	databaseConfigOut.MySQL = cfg.Database.MySQL
+	databaseConfigOut.Postgres = cfg.Database.Postgres
 
 	if databaseConfigOut.Backend == "sqlite" {
 		databasePath, err := resolveDatabasePath(filename, cfg.Database.SQLite.Path)
