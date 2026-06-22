@@ -9,24 +9,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	ProviderTypeDeepSeek  = "deepseek"
-	ProviderTypeOpenAI    = "openai"
-	ProviderTypeCustom    = "custom"
-	ProviderTypeGoogle    = "google"
-	ProviderTypeAnthropic  = "anthropic"
-	ProviderTypeXAI        = "xai"
-	ProviderTypePerplexity = "perplexity"
-	ProviderTypeOllama     = "ollama"
-	ProviderTypeGroq       = "groq"
-	ProviderTypeTogether   = "together"
-	ProviderTypeMistral    = "mistral"
-	ProviderTypeBedrock    = "bedrock"
 	DefaultDatabasePath    = "omni.db"
 )
 
@@ -53,108 +40,6 @@ type configFile struct {
 	Database  databaseConfig   `yaml:"database"`
 	Global    globalConfig     `yaml:"global"`
 	Telegram  telegramConfig   `yaml:"telegram"`
-}
-
-type databaseConfig struct {
-	Backend string       `yaml:"backend"`
-	SQLite  SQLiteConfig `yaml:"sqlite"`
-	MySQL   MySQLConfig  `yaml:"mysql"`
-}
-
-type DatabaseConfig struct {
-	Backend string
-	SQLite  SQLiteConfig
-	MySQL   MySQLConfig
-}
-
-type SQLiteConfig struct {
-	Path string `yaml:"path"`
-}
-
-type MySQLConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Database string `yaml:"database"`
-}
-
-type ProviderConfig struct {
-	Name    string         `yaml:"name"`
-	Type    string         `yaml:"type"`
-	Enabled *bool          `yaml:"enabled"` // nil = true (default enabled)
-	APIKey       string         `yaml:"api_key"`
-	APIBase      string         `yaml:"api_base"`
-	AWSAccessKey string         `yaml:"aws_access_key"`
-	AWSSecretKey string         `yaml:"aws_secret_key"`
-	AWSRegion    string         `yaml:"aws_region"`
-	Timeout      *time.Duration `yaml:"timeout"`
-	Models       []ModelConfig  `yaml:"models"`
-}
-
-// IsEnabled returns whether the provider is enabled.
-// Defaults to true when the field is omitted.
-func (p ProviderConfig) IsEnabled() bool {
-	return p.Enabled == nil || *p.Enabled
-}
-
-func (p ProviderConfig) EffectiveType() string {
-	providerType := strings.ToLower(strings.TrimSpace(p.Type))
-	if providerType != "" {
-		return providerType
-	}
-
-	switch strings.ToLower(strings.TrimSpace(p.Name)) {
-	case ProviderTypeDeepSeek:
-		return ProviderTypeDeepSeek
-	case ProviderTypeOpenAI:
-		return ProviderTypeOpenAI
-	case ProviderTypeGoogle:
-		return ProviderTypeGoogle
-	case ProviderTypeAnthropic:
-		return ProviderTypeAnthropic
-	case ProviderTypeXAI:
-		return ProviderTypeXAI
-	case ProviderTypePerplexity:
-		return ProviderTypePerplexity
-	case ProviderTypeOllama:
-		return ProviderTypeOllama
-	case ProviderTypeGroq:
-		return ProviderTypeGroq
-	case ProviderTypeTogether:
-		return ProviderTypeTogether
-	case ProviderTypeMistral:
-		return ProviderTypeMistral
-	case ProviderTypeBedrock:
-		return ProviderTypeBedrock
-	default:
-		return ProviderTypeCustom
-	}
-}
-
-type ModelConfig struct {
-	Name             string   `yaml:"name"`
-	InputPrice       float64  `yaml:"input_price"`  // USD per 1M input tokens
-	OutputPrice      float64  `yaml:"output_price"` // USD per 1M output tokens
-	Temperature      *float32 `yaml:"temperature,omitempty"`
-	MaxReplyTokens   int      `yaml:"max_reply_tokens"`   // 0 inherits global.max_reply_tokens
-	MaxContextTokens int      `yaml:"max_context_tokens"` // 0 inherits global.max_context_tokens
-}
-
-type globalConfig struct {
-	InitialPrompt    string  `yaml:"initial_prompt"`
-	Temperature      float64 `yaml:"temperature"`
-	MaxReplyTokens   int     `yaml:"max_reply_tokens"`
-	MaxContextTokens int     `yaml:"max_context_tokens"`
-	HistorySize      int     `yaml:"history_size"`
-	SenderContext    string  `yaml:"sender_context"`
-}
-
-type telegramConfig struct {
-	BotToken        string  `yaml:"bot_token"`
-	AllowedUserIDs  []int64 `yaml:"allowed_user_ids"`
-	AdminUserIDs    []int64 `yaml:"admin_user_ids"`
-	AllowedGroupIDs []int64 `yaml:"allowed_group_ids"`
 }
 
 func (p *Params) Init() error {
