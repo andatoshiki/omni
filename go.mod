@@ -17,10 +17,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.54.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
+	github.com/lib/pq v1.12.3
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
 	github.com/xuri/excelize/v2 v2.10.1
 	github.com/yuin/goldmark v1.8.2
-	google.golang.org/genai v1.61.0
+	google.golang.org/genai v1.62.0
 	modernc.org/sqlite v1.53.0
 )
 
@@ -52,7 +53,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
-	github.com/lib/pq v1.12.3 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
