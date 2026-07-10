@@ -39,7 +39,7 @@ func (a *App) sessionListView(chatID int64, page int) (string, models.InlineKeyb
 		limit = 10
 	}
 	
-	sessions, err := a.store.ListSessions(chatID, 100)
+	sessions, err := a.store.ListSessions(chatID, limit)
 	if err != nil {
 		return "", models.InlineKeyboardMarkup{}, err
 	}

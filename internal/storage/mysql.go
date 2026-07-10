@@ -15,12 +15,21 @@ import (
 )
 
 const mysqlSchema = `
-	CREATE TABLE IF NOT EXISTS conversations (
+	CREATE TABLE IF NOT EXISTS sessions (
 		id INTEGER PRIMARY KEY AUTO_INCREMENT,
-		chat_id INTEGER UNIQUE,
-		messages TEXT NOT NULL,
+		chat_id INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		title_generated BOOLEAN NOT NULL DEFAULT FALSE,
+		messages LONGTEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX idx_sessions_chat_id ON sessions(chat_id);
+
+	CREATE TABLE IF NOT EXISTS active_sessions (
+		chat_id INTEGER PRIMARY KEY,
+		session_id INTEGER NOT NULL
 	);
 
 	CREATE TABLE IF NOT EXISTS user_context (
@@ -72,9 +81,6 @@ func newMySQLStore(cfg config.MySQLConfig) (Store, error) {
 
 	db := &mysqlStore{conn: mysqlDatabase}
 
-	// We split the schema by ';' because go-sql-driver/mysql does not support multi-statements easily without multiStatements=true DSN parameter.
-	// But it's safer to execute them one by one.
-	// Wait, let's just enable multiStatements=true in the DSN to keep it simple.
 	mysqlConfig.MultiStatements = true
 	dsn = mysqlConfig.FormatDSN()
 	mysqlDatabase, err = sql.Open("mysql", dsn)
@@ -83,50 +89,211 @@ func newMySQLStore(cfg config.MySQLConfig) (Store, error) {
 	}
 	db.conn = mysqlDatabase
 
-	_, err = mysqlDatabase.Exec(mysqlSchema)
-	if err != nil {
+	if err := migrateMySQLSchema(mysqlDatabase); err != nil {
 		_ = mysqlDatabase.Close()
-		return nil, fmt.Errorf("failed to create tables: %w", err)
+		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
 	slog.Default().Info("mysql database initialized", "host", cfg.Host, "db", cfg.DBName)
 	return db, nil
 }
 
+func migrateMySQLSchema(db *sql.DB) error {
+	var tableName string
+	err := db.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_name = 'sessions' AND table_schema = DATABASE()").Scan(&tableName)
+	if err == sql.ErrNoRows {
+		slog.Default().Info("running database migration to v2 (sessions)")
+		
+		_, _ = db.Exec("RENAME TABLE conversations TO conversations_legacy")
+
+		if _, err := db.Exec(mysqlSchema); err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`
+			INSERT INTO sessions (chat_id, title, title_generated, messages, created_at, updated_at)
+			SELECT chat_id, 'Initial Session', 1, messages, created_at, updated_at
+			FROM conversations_legacy
+		`)
+		if err != nil {
+			slog.Default().Warn("failed to migrate data from legacy conversations", "error", err)
+		}
+
+		_, err = db.Exec(`
+			INSERT INTO active_sessions (chat_id, session_id)
+			SELECT chat_id, id FROM sessions
+		`)
+		if err != nil {
+			slog.Default().Warn("failed to set active sessions from legacy", "error", err)
+		}
+	} else if err != nil {
+		return err
+	} else {
+		if _, err := db.Exec(mysqlSchema); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (db *mysqlStore) SaveSession(chatID int64, sessionID int64, messages []conversation.Message) error {
-	return fmt.Errorf("not implemented for MySQL yet")
+	jsonData, err := json.Marshal(messages)
+	if err != nil {
+		return fmt.Errorf("failed to marshal messages: %w", err)
+	}
+
+	query := `
+	UPDATE sessions SET
+		messages = ?,
+		updated_at = CURRENT_TIMESTAMP
+	WHERE id = ? AND chat_id = ?
+	`
+	_, err = db.conn.Exec(query, string(jsonData), sessionID, chatID)
+	if err != nil {
+		return fmt.Errorf("failed to save session: %w", err)
+	}
+	return nil
 }
 
 func (db *mysqlStore) LoadSession(sessionID int64) ([]conversation.Message, error) {
-	return nil, fmt.Errorf("not implemented for MySQL yet")
+	var jsonData string
+	query := "SELECT messages FROM sessions WHERE id = ?"
+
+	err := db.conn.QueryRow(query, sessionID).Scan(&jsonData)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return []conversation.Message{}, nil
+		}
+		return nil, fmt.Errorf("failed to load session: %w", err)
+	}
+
+	var messages []conversation.Message
+	err = json.Unmarshal([]byte(jsonData), &messages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal messages: %w", err)
+	}
+
+	return messages, nil
 }
 
 func (db *mysqlStore) GetActiveSession(chatID int64) (SessionMeta, error) {
-	return SessionMeta{}, fmt.Errorf("not implemented for MySQL yet")
+	query := `
+		SELECT s.id, s.chat_id, s.title, s.title_generated, s.updated_at
+		FROM active_sessions a
+		JOIN sessions s ON a.session_id = s.id
+		WHERE a.chat_id = ?
+	`
+	var meta SessionMeta
+	err := db.conn.QueryRow(query, chatID).Scan(&meta.ID, &meta.ChatID, &meta.Title, &meta.TitleGenerated, &meta.UpdatedAt)
+	if err != nil {
+		return SessionMeta{}, err
+	}
+	return meta, nil
 }
 
 func (db *mysqlStore) SetActiveSession(chatID int64, sessionID int64) error {
-	return fmt.Errorf("not implemented for MySQL yet")
+	query := `
+		INSERT INTO active_sessions (chat_id, session_id)
+		VALUES (?, ?)
+		ON DUPLICATE KEY UPDATE
+			session_id = VALUES(session_id)
+	`
+	_, err := db.conn.Exec(query, chatID, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to set active session: %w", err)
+	}
+	return nil
 }
 
 func (db *mysqlStore) CreateNewSession(chatID int64, title string) (SessionMeta, error) {
-	return SessionMeta{}, fmt.Errorf("not implemented for MySQL yet")
+	query := `
+		INSERT INTO sessions (chat_id, title, title_generated, messages, created_at, updated_at)
+		VALUES (?, ?, 0, '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`
+	res, err := db.conn.Exec(query, chatID, title)
+	if err != nil {
+		return SessionMeta{}, fmt.Errorf("failed to create new session: %w", err)
+	}
+
+	sessionID, err := res.LastInsertId()
+	if err != nil {
+		return SessionMeta{}, fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
+	err = db.SetActiveSession(chatID, sessionID)
+	if err != nil {
+		return SessionMeta{}, err
+	}
+
+	return db.GetActiveSession(chatID)
 }
 
 func (db *mysqlStore) ListSessions(chatID int64, limit int) ([]SessionMeta, error) {
-	return nil, fmt.Errorf("not implemented for MySQL yet")
+	query := `
+		SELECT id, chat_id, title, title_generated, updated_at
+		FROM sessions
+		WHERE chat_id = ?
+		ORDER BY updated_at DESC
+		LIMIT ?
+	`
+	rows, err := db.conn.Query(query, chatID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []SessionMeta
+	for rows.Next() {
+		var meta SessionMeta
+		if err := rows.Scan(&meta.ID, &meta.ChatID, &meta.Title, &meta.TitleGenerated, &meta.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan session meta: %w", err)
+		}
+		sessions = append(sessions, meta)
+	}
+	return sessions, nil
 }
 
 func (db *mysqlStore) UpdateSessionTitle(sessionID int64, title string, generated bool) error {
-	return fmt.Errorf("not implemented for MySQL yet")
+	genInt := 0
+	if generated {
+		genInt = 1
+	}
+	query := `
+		UPDATE sessions SET
+			title = ?,
+			title_generated = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	_, err := db.conn.Exec(query, title, genInt, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to update session title: %w", err)
+	}
+	return nil
 }
 
 func (db *mysqlStore) DeleteSession(sessionID int64) error {
-	return fmt.Errorf("not implemented for MySQL yet")
+	_, err := db.conn.Exec("DELETE FROM sessions WHERE id = ?", sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to delete session: %w", err)
+	}
+	_, err = db.conn.Exec("DELETE FROM active_sessions WHERE session_id = ?", sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to clear active session: %w", err)
+	}
+	return nil
 }
 
 func (db *mysqlStore) ClearSessions(chatID int64) error {
-	return fmt.Errorf("not implemented for MySQL yet")
+	_, err := db.conn.Exec("DELETE FROM sessions WHERE chat_id = ?", chatID)
+	if err != nil {
+		return fmt.Errorf("failed to delete sessions: %w", err)
+	}
+	_, err = db.conn.Exec("DELETE FROM active_sessions WHERE chat_id = ?", chatID)
+	if err != nil {
+		return fmt.Errorf("failed to clear active session: %w", err)
+	}
+	return nil
 }
 
 func (db *mysqlStore) SaveUserContext(chatID int64, context string) error {
@@ -188,10 +355,17 @@ func (db *mysqlStore) Close() error {
 
 // ExportMemory exports all conversations to a JSON file (for backup)
 func (db *mysqlStore) ExportMemory(filename string) error {
+	type SessionExport struct {
+		ID        int64                  `json:"id"`
+		Title     string                 `json:"title"`
+		Messages  []conversation.Message `json:"messages"`
+		UpdatedAt string                 `json:"updated_at"`
+	}
+
 	type ConversationExport struct {
-		ChatID   int64                  `json:"chat_id"`
-		Messages []conversation.Message `json:"messages"`
-		Context  string                 `json:"context,omitempty"`
+		ChatID   int64           `json:"chat_id"`
+		Context  string          `json:"context,omitempty"`
+		Sessions []SessionExport `json:"sessions"`
 	}
 
 	chatIDs, err := db.GetAllChats()
@@ -202,13 +376,28 @@ func (db *mysqlStore) ExportMemory(filename string) error {
 	var exports []ConversationExport
 
 	for _, chatID := range chatIDs {
-		// Dummy for now
 		context, _ := db.LoadUserContext(chatID)
+		
+		sessionsMeta, err := db.ListSessions(chatID, 1000)
+		if err != nil {
+			continue
+		}
+
+		var sessions []SessionExport
+		for _, sm := range sessionsMeta {
+			msgs, _ := db.LoadSession(sm.ID)
+			sessions = append(sessions, SessionExport{
+				ID:        sm.ID,
+				Title:     sm.Title,
+				Messages:  msgs,
+				UpdatedAt: sm.UpdatedAt,
+			})
+		}
 
 		exports = append(exports, ConversationExport{
 			ChatID:   chatID,
-			Messages: []conversation.Message{},
 			Context:  context,
+			Sessions: sessions,
 		})
 	}
 
