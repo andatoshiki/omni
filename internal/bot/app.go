@@ -13,8 +13,6 @@ import (
 	"github.com/andatoshiki/omni/internal/storage"
 )
 
-const errorStr = "❌ Error"
-
 // streamPreviewLimit leaves room for Telegram HTML expansion below its
 // 4096-character message limit.
 const streamPreviewLimit = 3500

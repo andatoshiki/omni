@@ -10,11 +10,19 @@ import (
 
 // Store defines the interface for all database backends.
 type Store interface {
-	SaveConversation(chatID int64, messages []conversation.Message) error
-	LoadConversation(chatID int64) ([]conversation.Message, error)
+	SaveSession(chatID int64, sessionID int64, messages []conversation.Message) error
+	LoadSession(chatID int64, sessionID int64) ([]conversation.Message, error)
+	GetActiveSession(chatID int64) (SessionMeta, error)
+	SetActiveSession(chatID int64, sessionID int64) error
+	CreateNewSession(chatID int64, title string) (SessionMeta, error)
+	// ListSessions returns every session when limit is zero or negative.
+	ListSessions(chatID int64, limit int) ([]SessionMeta, error)
+	UpdateSessionTitle(sessionID int64, title string, generated bool) error
+	DeleteSession(chatID int64, sessionID int64) error
+	ClearSessions(chatID int64) error
+
 	SaveUserContext(chatID int64, context string) error
 	LoadUserContext(chatID int64) (string, error)
-	ClearConversation(chatID int64) error
 	GetAllChats() ([]int64, error)
 	ExportMemory(filename string) error
 	SaveTokenUsage(chatID, userID int64, usage providers.TokenUsage) error
@@ -29,6 +37,14 @@ type TokenUsageSummary struct {
 	PromptTokens     int64
 	CompletionTokens int64
 	TotalTokens      int64
+}
+
+type SessionMeta struct {
+	ID             int64
+	ChatID         int64
+	Title          string
+	TitleGenerated bool
+	UpdatedAt      string
 }
 
 // Open initializes the appropriate database backend based on the provided configuration.
