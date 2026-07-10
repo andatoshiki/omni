@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	telegram "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -22,6 +23,12 @@ func (a *App) handleCallbackQuery(ctx context.Context, query *models.CallbackQue
 
 	if page, ok := providers.ParseProviderPageCallback(query.Data); ok {
 		a.showProviderPage(ctx, query, chatID, messageID, page)
+		return
+	}
+	
+	if strings.HasPrefix(query.Data, "session:") {
+		parts := strings.Split(query.Data, ":")
+		a.handleSessionCallback(ctx, query, chatID, messageID, parts)
 		return
 	}
 	if provider, page, ok := providers.ParseModelListCallback(query.Data); ok {

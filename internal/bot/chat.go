@@ -29,7 +29,7 @@ func (c *CommandHandler) Chat(ctx context.Context, input ChatInput) {
 		userID = msg.From.ID
 	}
 
-	modelID, request, history, storedUserPrompt, err := c.prepareChatContext(ctx, chatID, input)
+	modelID, request, history, storedUserPrompt, sessionID, err := c.prepareChatContext(ctx, chatID, input)
 	if err != nil {
 		// Error logging and replying is handled inside prepareChatContext to maintain context
 		return
@@ -37,21 +37,57 @@ func (c *CommandHandler) Chat(ctx context.Context, input ChatInput) {
 
 	text, usage, streamErr := c.executeChatStream(ctx, msg, modelID, request, requestStartedAt)
 
-	c.finalizeChatTurn(chatID, userID, msg, input, history, storedUserPrompt, text, usage, streamErr)
+	c.finalizeChatTurn(chatID, sessionID, userID, msg, input, history, storedUserPrompt, text, usage, streamErr)
 }
 
-func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, input ChatInput) (providers.ModelID, *providers.ChatCompletionStreamRequest, []conversation.Message, string, error) {
+func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, input ChatInput) (providers.ModelID, *providers.ChatCompletionStreamRequest, []conversation.Message, string, int64, error) {
 	msg := input.Messages[0]
+
+	// Session timeout and active session resolution
+	activeSession, err := c.app.store.GetActiveSession(chatID)
+	var sessionID int64
+	createNew := false
+
+	if err != nil {
+		createNew = true
+	} else {
+		// SQLite returns string like "2006-01-02 15:04:05" for CURRENT_TIMESTAMP
+		updatedAt, parseErr := time.Parse("2006-01-02 15:04:05", activeSession.UpdatedAt)
+		if parseErr == nil && time.Since(updatedAt) > c.app.params.SessionTimeout {
+			createNew = true
+		} else if parseErr != nil {
+			// if parse fails, fallback to standard RFC3339 just in case
+			if updatedAtRFC, parseErr2 := time.Parse(time.RFC3339, activeSession.UpdatedAt); parseErr2 == nil && time.Since(updatedAtRFC) > c.app.params.SessionTimeout {
+				createNew = true
+			}
+		}
+	}
+
+	if createNew {
+		activeSession, err = c.app.store.CreateNewSession(chatID, "New Session")
+		if err != nil {
+			c.app.logger.Error("failed to create new session", append(c.app.messageLogAttrs(msg), "error", err)...)
+			_, _ = c.reply(ctx, msg, errorMessage(err))
+			return providers.ModelID{}, nil, nil, "", 0, err
+		}
+	}
+	sessionID = activeSession.ID
+
+	// Title generation logic if needed
+	if !activeSession.TitleGenerated {
+		go c.generateSessionTitle(chatID, sessionID, input)
+	}
+
 	var history []conversation.Message
-	if stored, exists := c.msgHistory.Load(chatID); exists {
+	if stored, exists := c.msgHistory.Load(sessionID); exists {
 		history = stored.([]conversation.Message)
 	} else {
-		loaded, err := c.app.store.LoadConversation(chatID)
+		loaded, err := c.app.store.LoadSession(sessionID)
 		if err != nil {
-			c.app.logger.Warn("failed to load conversation from database", append(c.app.messageLogAttrs(msg), "error", err)...)
+			c.app.logger.Warn("failed to load session from database", append(c.app.messageLogAttrs(msg), "error", err)...)
 		} else {
 			history = loaded
-			c.msgHistory.Store(chatID, history)
+			c.msgHistory.Store(sessionID, history)
 		}
 	}
 
@@ -59,14 +95,14 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 	if _, err := c.app.providers.Resolve(modelID); err != nil {
 		c.app.logger.Error("failed to resolve ai provider", append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)...)
 		_, _ = c.reply(ctx, msg, errorMessage(err))
-		return modelID, nil, nil, "", err
+		return modelID, nil, nil, "", 0, err
 	}
 
 	userMessage, storedUserPrompt, err := c.userMessage(ctx, input)
 	if err != nil {
 		c.app.logger.Error("failed to prepare user message", append(c.app.messageLogAttrs(msg), "error", err)...)
 		_, _ = c.reply(ctx, msg, errorMessage(err))
-		return modelID, nil, nil, "", err
+		return modelID, nil, nil, "", 0, err
 	}
 
 	currentMessages := make([]conversation.Message, 0, 1)
@@ -106,7 +142,7 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 	if err != nil {
 		c.app.logger.Error("failed to build ai context window", append(c.app.messageLogAttrs(msg), "provider", modelID.Provider, "model", modelID.Model, "error", err)...)
 		_, _ = c.reply(ctx, msg, errorMessage(err))
-		return modelID, nil, nil, "", err
+		return modelID, nil, nil, "", 0, err
 	}
 
 	request := &providers.ChatCompletionStreamRequest{
@@ -134,6 +170,56 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 		)...,
 	)
 
-	return modelID, request, history, storedUserPrompt, nil
+	return modelID, request, history, storedUserPrompt, sessionID, nil
+}
+
+func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, input ChatInput) {
+	msg := input.Messages[0]
+	modelID := c.currentModel(chatID)
+	
+	// Create a short prompt to generate a title
+	prompt := "Summarize the user's message in 3 to 5 words to use as a chat title. Do not include quotes or extra text. User message: " + msg.Text
+	
+	request := &providers.ChatCompletionStreamRequest{
+		Model:       modelID.Model,
+		Temperature: 0.5,
+		MaxTokens:   15,
+		Messages: []providers.ChatMessage{
+			{Role: providers.RoleUser, Content: prompt},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := c.app.providers.CreateChatCompletionStream(ctx, modelID, request)
+	if err != nil {
+		c.app.logger.Warn("failed to initialize title generation stream", "error", err)
+		c.app.store.UpdateSessionTitle(sessionID, "Chat from " + time.Now().Format("Jan 02 15:04"), false)
+		// We don't update TitleGenerated so it can retry later
+		return
+	}
+	defer stream.Close()
+
+	var title string
+	for {
+		chunk, err := stream.Recv()
+		if err != nil {
+			break
+		}
+		for _, choice := range chunk.Choices {
+			title += choice.Delta.Content
+		}
+	}
+
+	if title == "" {
+		c.app.logger.Warn("empty title generated")
+		c.app.store.UpdateSessionTitle(sessionID, "Chat from " + time.Now().Format("Jan 02 15:04"), false)
+		return
+	}
+
+	if err := c.app.store.UpdateSessionTitle(sessionID, title, true); err != nil {
+		c.app.logger.Error("failed to save generated title", "error", err)
+	}
 }
 

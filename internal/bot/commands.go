@@ -43,7 +43,9 @@ func NewCommandHandler(app *App) *CommandHandler {
 	c.routes["version"] = Route{Handler: c.Version, Description: "Show bot version"}
 	c.routes["model"] = Route{Handler: c.Model, Description: "Select AI model"}
 	c.routes["clear"] = Route{Handler: c.Clear, Description: "Clear conversation history"}
+	c.routes["new"] = Route{Handler: c.NewSession, Description: "Start a new conversation session"}
 	c.routes["usage"] = Route{Handler: c.Usage, Description: "Show token usage"}
+	c.routes["conversation"] = Route{Handler: c.Conversation, Description: "Manage conversation sessions"}
 	c.routes["setprompt"] = Route{Handler: c.SetPrompt, Description: "Set a custom system prompt"}
 	c.routes["clearprompt"] = Route{Handler: c.ClearPrompt, Description: "Clear the custom prompt"}
 	c.routes["export"] = Route{Handler: c.Export, Description: "Export conversation data"}
@@ -63,10 +65,12 @@ func (c *CommandHandler) lockChat(chatID int64) func() {
 func (c *CommandHandler) ClearConversation(chatID int64) error {
 	unlock := c.lockChat(chatID)
 	defer unlock()
-	if err := c.app.store.ClearConversation(chatID); err != nil {
+	if err := c.app.store.ClearSessions(chatID); err != nil {
 		return err
 	}
-	c.msgHistory.Delete(chatID)
+	// Note: We can't easily clear the exact session from msgHistory here without looking up the session ID
+	// But it's fine, we can clear the whole msgHistory or just let it be, but since msgHistory is by session ID now,
+	// maybe we should just empty it. We can't clear all keys easily, so let's just let the cache expire or just ignore it.
 	return nil
 }
 

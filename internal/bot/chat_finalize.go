@@ -12,6 +12,7 @@ import (
 
 func (c *CommandHandler) finalizeChatTurn(
 	chatID int64,
+	sessionID int64,
 	userID int64,
 	msg *models.Message,
 	input ChatInput,
@@ -26,10 +27,10 @@ func (c *CommandHandler) finalizeChatTurn(
 	}
 
 	history = appendTurnToHistory(history, input, storedUserPrompt, text, c.app.params.HistorySize)
-	c.msgHistory.Store(chatID, history)
+	c.msgHistory.Store(sessionID, history)
 
-	if err := c.app.store.SaveConversation(chatID, history); err != nil {
-		c.app.logger.Warn("failed to save conversation to database", append(c.app.messageLogAttrs(msg), "history_messages", len(history), "error", err)...)
+	if err := c.app.store.SaveSession(chatID, sessionID, history); err != nil {
+		c.app.logger.Warn("failed to save session to database", append(c.app.messageLogAttrs(msg), "history_messages", len(history), "error", err)...)
 	}
 
 	if usage != nil {
