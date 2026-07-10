@@ -146,7 +146,7 @@ func (a *App) routeCommand(ctx context.Context, msg *models.Message) {
 
 	if route, exists := a.commands.routes[command]; exists {
 		a.logger.Info("telegram command routed", append(attrs, "handler", command)...)
-		route.Handler(ctx, msg)
+		route.Handler(ctx, a.commands, msg)
 		return
 	}
 

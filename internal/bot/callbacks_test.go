@@ -4,21 +4,22 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/andatoshiki/omni/internal/command"
 	"github.com/andatoshiki/omni/internal/providers"
 )
 
 func TestProviderSelectionViewPaginates(t *testing.T) {
-	allModels := make([]providers.ModelID, 0, MaxItemsPerPage+1)
-	for i := 0; i < MaxItemsPerPage+1; i++ {
+	allModels := make([]providers.ModelID, 0, command.MaxItemsPerPage+1)
+	for i := 0; i < command.MaxItemsPerPage+1; i++ {
 		allModels = append(allModels, providers.ModelID{Provider: fmt.Sprintf("provider-%02d", i), Model: "model"})
 	}
 
-	text, keyboard := providerSelectionView(allModels, providers.ModelID{Provider: "provider-00", Model: "model"}, 0)
+	text, keyboard := command.ProviderSelectionView(allModels, providers.ModelID{Provider: "provider-00", Model: "model"}, 0)
 	if text != "🤖 Select a provider:" {
 		t.Fatalf("text = %q", text)
 	}
-	if got := len(keyboard.InlineKeyboard); got != MaxItemsPerPage+1 {
-		t.Fatalf("row count = %d, want %d", got, MaxItemsPerPage+1)
+	if got := len(keyboard.InlineKeyboard); got != command.MaxItemsPerPage+1 {
+		t.Fatalf("row count = %d, want %d", got, command.MaxItemsPerPage+1)
 	}
 	if got := keyboard.InlineKeyboard[0][0].Text; got != "✅ provider-00" {
 		t.Fatalf("current provider label = %q", got)
@@ -30,14 +31,14 @@ func TestProviderSelectionViewPaginates(t *testing.T) {
 }
 
 func TestModelSelectionViewPaginatesAndNavigates(t *testing.T) {
-	allModels := make([]providers.ModelID, 0, MaxItemsPerPage+2)
-	for i := 0; i < MaxItemsPerPage+1; i++ {
+	allModels := make([]providers.ModelID, 0, command.MaxItemsPerPage+2)
+	for i := 0; i < command.MaxItemsPerPage+1; i++ {
 		allModels = append(allModels, providers.ModelID{Provider: "openrouter", Model: fmt.Sprintf("model-%02d", i)})
 	}
 	allModels = append(allModels, providers.ModelID{Provider: "other", Model: "ignored"})
 
 	current := providers.ModelID{Provider: "openrouter", Model: "model-10"}
-	text, keyboard, ok := modelSelectionView(allModels, current, "openrouter", 1)
+	text, keyboard, ok := command.ModelSelectionView(allModels, current, "openrouter", 1)
 	if !ok {
 		t.Fatal("modelSelectionView() rejected a configured provider")
 	}
@@ -62,7 +63,7 @@ func TestModelSelectionViewPaginatesAndNavigates(t *testing.T) {
 
 func TestModelSelectionViewClampsStalePage(t *testing.T) {
 	allModels := []providers.ModelID{{Provider: "openai", Model: "gpt"}}
-	_, keyboard, ok := modelSelectionView(allModels, providers.ModelID{}, "openai", 99)
+	_, keyboard, ok := command.ModelSelectionView(allModels, providers.ModelID{}, "openai", 99)
 	if !ok {
 		t.Fatal("modelSelectionView() rejected a configured provider")
 	}
@@ -72,14 +73,14 @@ func TestModelSelectionViewClampsStalePage(t *testing.T) {
 }
 
 func TestModelSelectionViewRejectsUnknownProvider(t *testing.T) {
-	_, _, ok := modelSelectionView([]providers.ModelID{{Provider: "openai", Model: "gpt"}}, providers.ModelID{}, "missing", 0)
+	_, _, ok := command.ModelSelectionView([]providers.ModelID{{Provider: "openai", Model: "gpt"}}, providers.ModelID{}, "missing", 0)
 	if ok {
 		t.Fatal("modelSelectionView() accepted an unknown provider")
 	}
 }
 
 func TestConfirmationKeyboardIsMinimal(t *testing.T) {
-	keyboard := confirmationKeyboard("anthropic")
+	keyboard := command.ConfirmationKeyboard("anthropic")
 	if got := len(keyboard.InlineKeyboard); got != 2 {
 		t.Fatalf("row count = %d, want 2", got)
 	}

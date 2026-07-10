@@ -25,8 +25,6 @@ const mysqlSchema = `
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 	);
 
-	CREATE INDEX idx_sessions_chat_id ON sessions(chat_id);
-
 	CREATE TABLE IF NOT EXISTS active_sessions (
 		chat_id INTEGER PRIMARY KEY,
 		session_id INTEGER NOT NULL
@@ -48,9 +46,6 @@ const mysqlSchema = `
 		total_tokens INTEGER NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
-
-	CREATE INDEX idx_token_usage_chat_user
-	ON token_usage(chat_id, user_id);
 
 	CREATE TABLE IF NOT EXISTS chat_models (
 		chat_id INTEGER PRIMARY KEY,
@@ -103,7 +98,7 @@ func migrateMySQLSchema(db *sql.DB) error {
 	err := db.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_name = 'sessions' AND table_schema = DATABASE()").Scan(&tableName)
 	if err == sql.ErrNoRows {
 		slog.Default().Info("running database migration to v2 (sessions)")
-		
+
 		_, _ = db.Exec("RENAME TABLE conversations TO conversations_legacy")
 
 		if _, err := db.Exec(mysqlSchema); err != nil {
@@ -132,6 +127,34 @@ func migrateMySQLSchema(db *sql.DB) error {
 		if _, err := db.Exec(mysqlSchema); err != nil {
 			return err
 		}
+	}
+	return ensureMySQLIndexes(db)
+}
+
+func ensureMySQLIndexes(db *sql.DB) error {
+	if err := ensureMySQLIndex(db, "sessions", "idx_sessions_chat_id", "CREATE INDEX idx_sessions_chat_id ON sessions(chat_id)"); err != nil {
+		return err
+	}
+	return ensureMySQLIndex(db, "token_usage", "idx_token_usage_chat_user", "CREATE INDEX idx_token_usage_chat_user ON token_usage(chat_id, user_id)")
+}
+
+func ensureMySQLIndex(db *sql.DB, tableName, indexName, createStatement string) error {
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*)
+		FROM information_schema.statistics
+		WHERE table_schema = DATABASE()
+			AND table_name = ?
+			AND index_name = ?
+	`, tableName, indexName).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to inspect mysql index %s: %w", indexName, err)
+	}
+	if count > 0 {
+		return nil
+	}
+	if _, err := db.Exec(createStatement); err != nil {
+		return fmt.Errorf("failed to create mysql index %s: %w", indexName, err)
 	}
 	return nil
 }
@@ -377,7 +400,7 @@ func (db *mysqlStore) ExportMemory(filename string) error {
 
 	for _, chatID := range chatIDs {
 		context, _ := db.LoadUserContext(chatID)
-		
+
 		sessionsMeta, err := db.ListSessions(chatID, 1000)
 		if err != nil {
 			continue
@@ -414,7 +437,6 @@ func (db *mysqlStore) ExportMemory(filename string) error {
 	slog.Default().Info("memory exported", "file", filename, "chats", len(exports))
 	return nil
 }
-
 
 // SaveTokenUsage records token counts for a request.
 func (db *mysqlStore) SaveTokenUsage(chatID, userID int64, usage providers.TokenUsage) error {
