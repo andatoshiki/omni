@@ -326,7 +326,7 @@ func (db *mysqlStore) LoadUserContext(chatID int64) (string, error) {
 
 // GetAllChats returns all chat IDs in the database
 func (db *mysqlStore) GetAllChats() ([]int64, error) {
-	query := "SELECT DISTINCT chat_id FROM conversations"
+	query := "SELECT DISTINCT chat_id FROM sessions"
 	rows, err := db.conn.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chats: %w", err)

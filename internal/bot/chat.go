@@ -195,7 +195,9 @@ func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, inp
 	stream, err := c.app.providers.CreateChatCompletionStream(ctx, modelID, request)
 	if err != nil {
 		c.app.logger.Warn("failed to initialize title generation stream", "error", err)
-		c.app.store.UpdateSessionTitle(sessionID, "Chat from " + time.Now().Format("Jan 02 15:04"), false)
+		if err := c.app.store.UpdateSessionTitle(sessionID, "Chat from "+time.Now().Format("Jan 02 15:04"), false); err != nil {
+			c.app.logger.Error("failed to set fallback title", "error", err)
+		}
 		// We don't update TitleGenerated so it can retry later
 		return
 	}
@@ -214,7 +216,9 @@ func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, inp
 
 	if title == "" {
 		c.app.logger.Warn("empty title generated")
-		c.app.store.UpdateSessionTitle(sessionID, "Chat from " + time.Now().Format("Jan 02 15:04"), false)
+		if err := c.app.store.UpdateSessionTitle(sessionID, "Chat from "+time.Now().Format("Jan 02 15:04"), false); err != nil {
+			c.app.logger.Error("failed to set fallback title", "error", err)
+		}
 		return
 	}
 
