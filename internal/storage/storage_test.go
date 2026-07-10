@@ -61,10 +61,17 @@ func TestConversationStringContentRoundTrips(t *testing.T) {
 		{Role: providers.RoleUser, Content: "[User attached an image] describe this"},
 		{Role: providers.RoleAssistant, Content: "A test image."},
 	}
-	if err := database.SaveConversation(42, want); err != nil {
+	
+	activeSession, err := database.CreateNewSession(42, "Test Session")
+	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := database.LoadConversation(42)
+	
+	if err := database.SaveSession(42, activeSession.ID, want); err != nil {
+		t.Fatal(err)
+	}
+	
+	got, err := database.LoadSession(activeSession.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

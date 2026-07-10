@@ -93,52 +93,42 @@ func newMySQLStore(cfg config.MySQLConfig) (Store, error) {
 	return db, nil
 }
 
-// SaveConversation saves the message history for a chat
-func (db *mysqlStore) SaveConversation(chatID int64, messages []conversation.Message) error {
-	jsonData, err := json.Marshal(messages)
-	if err != nil {
-		return fmt.Errorf("failed to marshal messages: %w", err)
-	}
-
-	query := `
-	INSERT INTO conversations (chat_id, messages, updated_at)
-	VALUES (?, ?, CURRENT_TIMESTAMP)
-	ON DUPLICATE KEY UPDATE
-		messages = VALUES(messages),
-		updated_at = CURRENT_TIMESTAMP
-	`
-
-	_, err = db.conn.Exec(query, chatID, string(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to save conversation: %w", err)
-	}
-
-	return nil
+func (db *mysqlStore) SaveSession(chatID int64, sessionID int64, messages []conversation.Message) error {
+	return fmt.Errorf("not implemented for MySQL yet")
 }
 
-// LoadConversation loads the message history for a chat
-func (db *mysqlStore) LoadConversation(chatID int64) ([]conversation.Message, error) {
-	var jsonData string
-	query := "SELECT messages FROM conversations WHERE chat_id = ?"
-
-	err := db.conn.QueryRow(query, chatID).Scan(&jsonData)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return []conversation.Message{}, nil
-		}
-		return nil, fmt.Errorf("failed to load conversation: %w", err)
-	}
-
-	var messages []conversation.Message
-	err = json.Unmarshal([]byte(jsonData), &messages)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal messages: %w", err)
-	}
-
-	return messages, nil
+func (db *mysqlStore) LoadSession(sessionID int64) ([]conversation.Message, error) {
+	return nil, fmt.Errorf("not implemented for MySQL yet")
 }
 
-// SaveUserContext saves personalized context for a user
+func (db *mysqlStore) GetActiveSession(chatID int64) (SessionMeta, error) {
+	return SessionMeta{}, fmt.Errorf("not implemented for MySQL yet")
+}
+
+func (db *mysqlStore) SetActiveSession(chatID int64, sessionID int64) error {
+	return fmt.Errorf("not implemented for MySQL yet")
+}
+
+func (db *mysqlStore) CreateNewSession(chatID int64, title string) (SessionMeta, error) {
+	return SessionMeta{}, fmt.Errorf("not implemented for MySQL yet")
+}
+
+func (db *mysqlStore) ListSessions(chatID int64, limit int) ([]SessionMeta, error) {
+	return nil, fmt.Errorf("not implemented for MySQL yet")
+}
+
+func (db *mysqlStore) UpdateSessionTitle(sessionID int64, title string, generated bool) error {
+	return fmt.Errorf("not implemented for MySQL yet")
+}
+
+func (db *mysqlStore) DeleteSession(sessionID int64) error {
+	return fmt.Errorf("not implemented for MySQL yet")
+}
+
+func (db *mysqlStore) ClearSessions(chatID int64) error {
+	return fmt.Errorf("not implemented for MySQL yet")
+}
+
 func (db *mysqlStore) SaveUserContext(chatID int64, context string) error {
 	query := `
 	INSERT INTO user_context (chat_id, context_data, updated_at)
@@ -147,20 +137,16 @@ func (db *mysqlStore) SaveUserContext(chatID int64, context string) error {
 		context_data = VALUES(context_data),
 		updated_at = CURRENT_TIMESTAMP
 	`
-
 	_, err := db.conn.Exec(query, chatID, context)
 	if err != nil {
 		return fmt.Errorf("failed to save user context: %w", err)
 	}
-
 	return nil
 }
 
-// LoadUserContext loads personalized context for a user
 func (db *mysqlStore) LoadUserContext(chatID int64) (string, error) {
 	var context string
 	query := "SELECT context_data FROM user_context WHERE chat_id = ?"
-
 	err := db.conn.QueryRow(query, chatID).Scan(&context)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -168,18 +154,7 @@ func (db *mysqlStore) LoadUserContext(chatID int64) (string, error) {
 		}
 		return "", fmt.Errorf("failed to load user context: %w", err)
 	}
-
 	return context, nil
-}
-
-// ClearConversation deletes a chat's conversation history
-func (db *mysqlStore) ClearConversation(chatID int64) error {
-	query := "DELETE FROM conversations WHERE chat_id = ?"
-	_, err := db.conn.Exec(query, chatID)
-	if err != nil {
-		return fmt.Errorf("failed to clear conversation: %w", err)
-	}
-	return nil
 }
 
 // GetAllChats returns all chat IDs in the database
@@ -227,16 +202,12 @@ func (db *mysqlStore) ExportMemory(filename string) error {
 	var exports []ConversationExport
 
 	for _, chatID := range chatIDs {
-		messages, err := db.LoadConversation(chatID)
-		if err != nil {
-			continue
-		}
-
+		// Dummy for now
 		context, _ := db.LoadUserContext(chatID)
 
 		exports = append(exports, ConversationExport{
 			ChatID:   chatID,
-			Messages: messages,
+			Messages: []conversation.Message{},
 			Context:  context,
 		})
 	}
