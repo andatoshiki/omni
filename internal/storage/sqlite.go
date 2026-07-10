@@ -86,7 +86,7 @@ func migrateSQLiteSchema(db *sql.DB) error {
 	err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'").Scan(&tableName)
 	if err == sql.ErrNoRows {
 		slog.Default().Info("running database migration to v2 (sessions)")
-		
+
 		_, _ = db.Exec("ALTER TABLE conversations RENAME TO conversations_legacy")
 
 		if _, err := db.Exec(sqliteSchema); err != nil {
@@ -217,9 +217,14 @@ func (db *sqliteStore) ListSessions(chatID int64, limit int) ([]SessionMeta, err
 		FROM sessions
 		WHERE chat_id = ?
 		ORDER BY updated_at DESC
-		LIMIT ?
 	`
-	rows, err := db.conn.Query(query, chatID, limit)
+	var rows *sql.Rows
+	var err error
+	if limit > 0 {
+		rows, err = db.conn.Query(query+" LIMIT ?", chatID, limit)
+	} else {
+		rows, err = db.conn.Query(query, chatID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -356,8 +361,8 @@ func (db *sqliteStore) ExportMemory(filename string) error {
 
 	for _, chatID := range chatIDs {
 		context, _ := db.LoadUserContext(chatID)
-		
-		sessionsMeta, err := db.ListSessions(chatID, 1000)
+
+		sessionsMeta, err := db.ListSessions(chatID, 0)
 		if err != nil {
 			continue
 		}

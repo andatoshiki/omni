@@ -15,6 +15,7 @@ type Store interface {
 	GetActiveSession(chatID int64) (SessionMeta, error)
 	SetActiveSession(chatID int64, sessionID int64) error
 	CreateNewSession(chatID int64, title string) (SessionMeta, error)
+	// ListSessions returns every session when limit is zero or negative.
 	ListSessions(chatID int64, limit int) ([]SessionMeta, error)
 	UpdateSessionTitle(sessionID int64, title string, generated bool) error
 	DeleteSession(sessionID int64) error

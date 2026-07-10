@@ -2,6 +2,8 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
+	"os"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -61,16 +63,16 @@ func TestConversationStringContentRoundTrips(t *testing.T) {
 		{Role: providers.RoleUser, Content: "[User attached an image] describe this"},
 		{Role: providers.RoleAssistant, Content: "A test image."},
 	}
-	
+
 	activeSession, err := database.CreateNewSession(42, "Test Session")
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	if err := database.SaveSession(42, activeSession.ID, want); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	got, err := database.LoadSession(activeSession.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -83,5 +85,58 @@ func TestConversationStringContentRoundTrips(t *testing.T) {
 		if !ok || content != want[index].Content {
 			t.Fatalf("message %d content = %#v (%T), want %q", index, got[index].Content, got[index].Content, want[index].Content)
 		}
+	}
+}
+
+func TestExportMemoryIncludesMoreThanThousandSessions(t *testing.T) {
+	t.Parallel()
+
+	connection, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if _, err := connection.Exec(sqliteSchema); err != nil {
+		t.Fatal(err)
+	}
+	database := &sqliteStore{conn: connection}
+
+	for id := 0; id < 1001; id++ {
+		session, err := database.CreateNewSession(42, "Session")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := database.SaveSession(42, session.ID, []conversation.Message{{Role: providers.RoleUser, Content: "hello"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	filename := t.TempDir() + "/memory-export.json"
+	if err := database.ExportMemory(filename); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var exports []struct {
+		ChatID   int64 `json:"chat_id"`
+		Sessions []struct {
+			ID int64 `json:"id"`
+		} `json:"sessions"`
+	}
+	if err := json.Unmarshal(data, &exports); err != nil {
+		t.Fatal(err)
+	}
+	if len(exports) != 1 {
+		t.Fatalf("export count = %d, want 1", len(exports))
+	}
+	if exports[0].ChatID != 42 {
+		t.Fatalf("chat id = %d, want 42", exports[0].ChatID)
+	}
+	if got := len(exports[0].Sessions); got != 1001 {
+		t.Fatalf("session count = %d, want 1001", got)
 	}
 }

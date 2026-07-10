@@ -257,9 +257,14 @@ func (db *mysqlStore) ListSessions(chatID int64, limit int) ([]SessionMeta, erro
 		FROM sessions
 		WHERE chat_id = ?
 		ORDER BY updated_at DESC
-		LIMIT ?
 	`
-	rows, err := db.conn.Query(query, chatID, limit)
+	var rows *sql.Rows
+	var err error
+	if limit > 0 {
+		rows, err = db.conn.Query(query+" LIMIT ?", chatID, limit)
+	} else {
+		rows, err = db.conn.Query(query, chatID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -401,7 +406,7 @@ func (db *mysqlStore) ExportMemory(filename string) error {
 	for _, chatID := range chatIDs {
 		context, _ := db.LoadUserContext(chatID)
 
-		sessionsMeta, err := db.ListSessions(chatID, 1000)
+		sessionsMeta, err := db.ListSessions(chatID, 0)
 		if err != nil {
 			continue
 		}

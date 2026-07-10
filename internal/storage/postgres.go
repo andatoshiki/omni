@@ -94,7 +94,7 @@ func migratePostgresSchema(db *sql.DB) error {
 	err := db.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_name = 'sessions' AND table_schema = 'public'").Scan(&tableName)
 	if err == sql.ErrNoRows {
 		slog.Default().Info("running database migration to v2 (sessions)")
-		
+
 		_, _ = db.Exec("ALTER TABLE conversations RENAME TO conversations_legacy")
 
 		if _, err := db.Exec(postgresSchema); err != nil {
@@ -222,9 +222,14 @@ func (db *postgresStore) ListSessions(chatID int64, limit int) ([]SessionMeta, e
 		FROM sessions
 		WHERE chat_id = $1
 		ORDER BY updated_at DESC
-		LIMIT $2
 	`
-	rows, err := db.conn.Query(query, chatID, limit)
+	var rows *sql.Rows
+	var err error
+	if limit > 0 {
+		rows, err = db.conn.Query(query+" LIMIT $2", chatID, limit)
+	} else {
+		rows, err = db.conn.Query(query, chatID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -361,8 +366,8 @@ func (db *postgresStore) ExportMemory(filename string) error {
 
 	for _, chatID := range chatIDs {
 		context, _ := db.LoadUserContext(chatID)
-		
-		sessionsMeta, err := db.ListSessions(chatID, 1000)
+
+		sessionsMeta, err := db.ListSessions(chatID, 0)
 		if err != nil {
 			continue
 		}
