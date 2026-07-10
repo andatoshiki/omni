@@ -11,14 +11,14 @@ import (
 // Store defines the interface for all database backends.
 type Store interface {
 	SaveSession(chatID int64, sessionID int64, messages []conversation.Message) error
-	LoadSession(sessionID int64) ([]conversation.Message, error)
+	LoadSession(chatID int64, sessionID int64) ([]conversation.Message, error)
 	GetActiveSession(chatID int64) (SessionMeta, error)
 	SetActiveSession(chatID int64, sessionID int64) error
 	CreateNewSession(chatID int64, title string) (SessionMeta, error)
 	// ListSessions returns every session when limit is zero or negative.
 	ListSessions(chatID int64, limit int) ([]SessionMeta, error)
 	UpdateSessionTitle(sessionID int64, title string, generated bool) error
-	DeleteSession(sessionID int64) error
+	DeleteSession(chatID int64, sessionID int64) error
 	ClearSessions(chatID int64) error
 
 	SaveUserContext(chatID int64, context string) error

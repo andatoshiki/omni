@@ -90,39 +90,59 @@ func newPostgresStore(cfg config.PostgresConfig) (Store, error) {
 }
 
 func migratePostgresSchema(db *sql.DB) error {
-	var tableName string
-	err := db.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_name = 'sessions' AND table_schema = 'public'").Scan(&tableName)
-	if err == sql.ErrNoRows {
-		slog.Default().Info("running database migration to v2 (sessions)")
-
-		_, _ = db.Exec("ALTER TABLE conversations RENAME TO conversations_legacy")
-
-		if _, err := db.Exec(postgresSchema); err != nil {
-			return err
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO sessions (chat_id, title, title_generated, messages, created_at, updated_at)
-			SELECT chat_id, 'Initial Session', true, messages, created_at, updated_at
-			FROM conversations_legacy
-		`)
-		if err != nil {
-			slog.Default().Warn("failed to migrate data from legacy conversations", "error", err)
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO active_sessions (chat_id, session_id)
-			SELECT chat_id, id FROM sessions
-		`)
-		if err != nil {
-			slog.Default().Warn("failed to set active sessions from legacy", "error", err)
-		}
-	} else if err != nil {
+	if _, err := db.Exec(postgresSchema); err != nil {
 		return err
-	} else {
-		if _, err := db.Exec(postgresSchema); err != nil {
-			return err
-		}
+	}
+	hasLegacy, err := postgresTableExists(db, "conversations")
+	if err != nil || !hasLegacy {
+		return err
+	}
+
+	slog.Default().Info("running database migration to v2 (sessions)")
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	if err := migratePostgresLegacyConversations(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+func postgresTableExists(db *sql.DB, tableName string) (bool, error) {
+	var exists bool
+	err := db.QueryRow("SELECT to_regclass('public.' || $1) IS NOT NULL", tableName).Scan(&exists)
+	return exists, err
+}
+
+func migratePostgresLegacyConversations(tx *sql.Tx) error {
+	if _, err := tx.Exec(`
+		INSERT INTO sessions (chat_id, title, title_generated, messages, created_at, updated_at)
+		SELECT c.chat_id, 'Initial Session', true, c.messages, c.created_at, c.updated_at
+		FROM conversations c
+		WHERE NOT EXISTS (
+			SELECT 1 FROM sessions s WHERE s.chat_id = c.chat_id
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to migrate legacy conversations: %w", err)
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO active_sessions (chat_id, session_id)
+		SELECT c.chat_id, MIN(s.id)
+		FROM conversations c
+		JOIN sessions s ON s.chat_id = c.chat_id
+			AND s.title = 'Initial Session'
+			AND s.title_generated = true
+			AND s.messages = c.messages
+		GROUP BY c.chat_id
+		ON CONFLICT (chat_id) DO UPDATE SET
+			session_id = EXCLUDED.session_id
+	`); err != nil {
+		return fmt.Errorf("failed to set active sessions from legacy: %w", err)
+	}
+	if _, err := tx.Exec("ALTER TABLE conversations RENAME TO conversations_legacy"); err != nil {
+		return fmt.Errorf("failed to archive legacy conversations: %w", err)
 	}
 	return nil
 }
@@ -146,11 +166,11 @@ func (db *postgresStore) SaveSession(chatID int64, sessionID int64, messages []c
 	return nil
 }
 
-func (db *postgresStore) LoadSession(sessionID int64) ([]conversation.Message, error) {
+func (db *postgresStore) LoadSession(chatID int64, sessionID int64) ([]conversation.Message, error) {
 	var jsonData string
-	query := "SELECT messages FROM sessions WHERE id = $1"
+	query := "SELECT messages FROM sessions WHERE id = $1 AND chat_id = $2"
 
-	err := db.conn.QueryRow(query, sessionID).Scan(&jsonData)
+	err := db.conn.QueryRow(query, sessionID, chatID).Scan(&jsonData)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return []conversation.Message{}, nil
@@ -183,6 +203,9 @@ func (db *postgresStore) GetActiveSession(chatID int64) (SessionMeta, error) {
 }
 
 func (db *postgresStore) SetActiveSession(chatID int64, sessionID int64) error {
+	if err := db.ensureSessionBelongsToChat(chatID, sessionID); err != nil {
+		return err
+	}
 	query := `
 		INSERT INTO active_sessions (chat_id, session_id)
 		VALUES ($1, $2)
@@ -192,6 +215,18 @@ func (db *postgresStore) SetActiveSession(chatID int64, sessionID int64) error {
 	_, err := db.conn.Exec(query, chatID, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to set active session: %w", err)
+	}
+	return nil
+}
+
+func (db *postgresStore) ensureSessionBelongsToChat(chatID int64, sessionID int64) error {
+	var id int64
+	err := db.conn.QueryRow("SELECT id FROM sessions WHERE id = $1 AND chat_id = $2", sessionID, chatID).Scan(&id)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("session %d not found for chat %d", sessionID, chatID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to verify session ownership: %w", err)
 	}
 	return nil
 }
@@ -243,6 +278,9 @@ func (db *postgresStore) ListSessions(chatID int64, limit int) ([]SessionMeta, e
 		}
 		sessions = append(sessions, meta)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate sessions: %w", err)
+	}
 	return sessions, nil
 }
 
@@ -261,12 +299,19 @@ func (db *postgresStore) UpdateSessionTitle(sessionID int64, title string, gener
 	return nil
 }
 
-func (db *postgresStore) DeleteSession(sessionID int64) error {
-	_, err := db.conn.Exec("DELETE FROM sessions WHERE id = $1", sessionID)
+func (db *postgresStore) DeleteSession(chatID int64, sessionID int64) error {
+	result, err := db.conn.Exec("DELETE FROM sessions WHERE id = $1 AND chat_id = $2", sessionID, chatID)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
-	_, err = db.conn.Exec("DELETE FROM active_sessions WHERE session_id = $1", sessionID)
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to inspect deleted session count: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("session %d not found for chat %d", sessionID, chatID)
+	}
+	_, err = db.conn.Exec("DELETE FROM active_sessions WHERE chat_id = $1 AND session_id = $2", chatID, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to clear active session: %w", err)
 	}
@@ -330,6 +375,9 @@ func (db *postgresStore) GetAllChats() ([]int64, error) {
 		}
 		chatIDs = append(chatIDs, chatID)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate chats: %w", err)
+	}
 
 	return chatIDs, nil
 }
@@ -374,7 +422,7 @@ func (db *postgresStore) ExportMemory(filename string) error {
 
 		var sessions []SessionExport
 		for _, sm := range sessionsMeta {
-			msgs, _ := db.LoadSession(sm.ID)
+			msgs, _ := db.LoadSession(chatID, sm.ID)
 			sessions = append(sessions, SessionExport{
 				ID:        sm.ID,
 				Title:     sm.Title,

@@ -71,7 +71,7 @@ func HandleSessionCallback(ctx context.Context, b BotContext, query *models.Call
 			sessionID, _ := strconv.ParseInt(parts[2], 10, 64)
 			page, _ := strconv.Atoi(parts[3])
 
-			if err := b.Store().DeleteSession(sessionID); err != nil {
+			if err := b.Store().DeleteSession(chatID, sessionID); err != nil {
 				b.AnswerCallback(ctx, query.ID, "❌ Failed to delete session", true)
 				return
 			}

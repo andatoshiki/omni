@@ -73,7 +73,7 @@ func TestConversationStringContentRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := database.LoadSession(activeSession.ID)
+	got, err := database.LoadSession(42, activeSession.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,5 +138,112 @@ func TestExportMemoryIncludesMoreThanThousandSessions(t *testing.T) {
 	}
 	if got := len(exports[0].Sessions); got != 1001 {
 		t.Fatalf("session count = %d, want 1001", got)
+	}
+}
+
+func TestSQLiteMigrationPreservesLegacyConversation(t *testing.T) {
+	t.Parallel()
+
+	connection, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if _, err := connection.Exec(`
+		CREATE TABLE conversations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			chat_id INTEGER UNIQUE,
+			messages TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []conversation.Message{{Role: providers.RoleUser, Content: "legacy hello"}}
+	jsonData, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.Exec("INSERT INTO conversations (chat_id, messages) VALUES (?, ?)", int64(42), string(jsonData)); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateSQLiteSchema(connection); err != nil {
+		t.Fatal(err)
+	}
+
+	database := &sqliteStore{conn: connection}
+	activeSession, err := database.GetActiveSession(42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := database.LoadSession(42, activeSession.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Content != "legacy hello" {
+		t.Fatalf("migrated messages = %#v", got)
+	}
+	hasConversations, err := sqliteTableExists(connection, "conversations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasConversations {
+		t.Fatal("legacy conversations table was not archived")
+	}
+	hasLegacy, err := sqliteTableExists(connection, "conversations_legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasLegacy {
+		t.Fatal("conversations_legacy table missing after migration")
+	}
+}
+
+func TestSQLiteSessionOwnershipIsEnforced(t *testing.T) {
+	t.Parallel()
+
+	connection, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if _, err := connection.Exec(sqliteSchema); err != nil {
+		t.Fatal(err)
+	}
+	database := &sqliteStore{conn: connection}
+
+	chatSession, err := database.CreateNewSession(42, "chat session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherSession, err := database.CreateNewSession(99, "other session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetActiveSession(42, otherSession.ID); err == nil {
+		t.Fatal("SetActiveSession allowed a session from another chat")
+	}
+	if err := database.DeleteSession(42, otherSession.ID); err == nil {
+		t.Fatal("DeleteSession allowed a session from another chat")
+	}
+
+	otherSessions, err := database.ListSessions(99, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(otherSessions) != 1 || otherSessions[0].ID != otherSession.ID {
+		t.Fatalf("other chat sessions = %#v", otherSessions)
+	}
+	if err := database.DeleteSession(42, chatSession.ID); err != nil {
+		t.Fatal(err)
+	}
+	chatSessions, err := database.ListSessions(42, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chatSessions) != 0 {
+		t.Fatalf("chat sessions after delete = %#v", chatSessions)
 	}
 }

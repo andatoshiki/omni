@@ -94,41 +94,75 @@ func newMySQLStore(cfg config.MySQLConfig) (Store, error) {
 }
 
 func migrateMySQLSchema(db *sql.DB) error {
-	var tableName string
-	err := db.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_name = 'sessions' AND table_schema = DATABASE()").Scan(&tableName)
-	if err == sql.ErrNoRows {
-		slog.Default().Info("running database migration to v2 (sessions)")
-
-		_, _ = db.Exec("RENAME TABLE conversations TO conversations_legacy")
-
-		if _, err := db.Exec(mysqlSchema); err != nil {
-			return err
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO sessions (chat_id, title, title_generated, messages, created_at, updated_at)
-			SELECT chat_id, 'Initial Session', 1, messages, created_at, updated_at
-			FROM conversations_legacy
-		`)
-		if err != nil {
-			slog.Default().Warn("failed to migrate data from legacy conversations", "error", err)
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO active_sessions (chat_id, session_id)
-			SELECT chat_id, id FROM sessions
-		`)
-		if err != nil {
-			slog.Default().Warn("failed to set active sessions from legacy", "error", err)
-		}
-	} else if err != nil {
+	if _, err := db.Exec(mysqlSchema); err != nil {
 		return err
-	} else {
-		if _, err := db.Exec(mysqlSchema); err != nil {
-			return err
-		}
 	}
-	return ensureMySQLIndexes(db)
+	if err := ensureMySQLIndexes(db); err != nil {
+		return err
+	}
+	hasLegacy, err := mysqlTableExists(db, "conversations")
+	if err != nil || !hasLegacy {
+		return err
+	}
+
+	slog.Default().Info("running database migration to v2 (sessions)")
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	if err := migrateMySQLLegacyConversations(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if _, err := db.Exec("RENAME TABLE conversations TO conversations_legacy"); err != nil {
+		slog.Default().Warn("failed to archive legacy conversations", "error", err)
+	}
+	return nil
+}
+
+func mysqlTableExists(db *sql.DB, tableName string) (bool, error) {
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*)
+		FROM information_schema.tables
+		WHERE table_schema = DATABASE()
+			AND table_name = ?
+	`, tableName).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func migrateMySQLLegacyConversations(tx *sql.Tx) error {
+	if _, err := tx.Exec(`
+		INSERT INTO sessions (chat_id, title, title_generated, messages, created_at, updated_at)
+		SELECT c.chat_id, 'Initial Session', 1, c.messages, c.created_at, c.updated_at
+		FROM conversations c
+		WHERE NOT EXISTS (
+			SELECT 1 FROM sessions s WHERE s.chat_id = c.chat_id
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to migrate legacy conversations: %w", err)
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO active_sessions (chat_id, session_id)
+		SELECT c.chat_id, MIN(s.id)
+		FROM conversations c
+		JOIN sessions s ON s.chat_id = c.chat_id
+			AND s.title = 'Initial Session'
+			AND s.title_generated = TRUE
+			AND s.messages = c.messages
+		GROUP BY c.chat_id
+		ON DUPLICATE KEY UPDATE
+			session_id = VALUES(session_id)
+	`); err != nil {
+		return fmt.Errorf("failed to set active sessions from legacy: %w", err)
+	}
+	return nil
 }
 
 func ensureMySQLIndexes(db *sql.DB) error {
@@ -178,11 +212,11 @@ func (db *mysqlStore) SaveSession(chatID int64, sessionID int64, messages []conv
 	return nil
 }
 
-func (db *mysqlStore) LoadSession(sessionID int64) ([]conversation.Message, error) {
+func (db *mysqlStore) LoadSession(chatID int64, sessionID int64) ([]conversation.Message, error) {
 	var jsonData string
-	query := "SELECT messages FROM sessions WHERE id = ?"
+	query := "SELECT messages FROM sessions WHERE id = ? AND chat_id = ?"
 
-	err := db.conn.QueryRow(query, sessionID).Scan(&jsonData)
+	err := db.conn.QueryRow(query, sessionID, chatID).Scan(&jsonData)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return []conversation.Message{}, nil
@@ -215,6 +249,9 @@ func (db *mysqlStore) GetActiveSession(chatID int64) (SessionMeta, error) {
 }
 
 func (db *mysqlStore) SetActiveSession(chatID int64, sessionID int64) error {
+	if err := db.ensureSessionBelongsToChat(chatID, sessionID); err != nil {
+		return err
+	}
 	query := `
 		INSERT INTO active_sessions (chat_id, session_id)
 		VALUES (?, ?)
@@ -224,6 +261,18 @@ func (db *mysqlStore) SetActiveSession(chatID int64, sessionID int64) error {
 	_, err := db.conn.Exec(query, chatID, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to set active session: %w", err)
+	}
+	return nil
+}
+
+func (db *mysqlStore) ensureSessionBelongsToChat(chatID int64, sessionID int64) error {
+	var id int64
+	err := db.conn.QueryRow("SELECT id FROM sessions WHERE id = ? AND chat_id = ?", sessionID, chatID).Scan(&id)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("session %d not found for chat %d", sessionID, chatID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to verify session ownership: %w", err)
 	}
 	return nil
 }
@@ -278,6 +327,9 @@ func (db *mysqlStore) ListSessions(chatID int64, limit int) ([]SessionMeta, erro
 		}
 		sessions = append(sessions, meta)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate sessions: %w", err)
+	}
 	return sessions, nil
 }
 
@@ -300,12 +352,19 @@ func (db *mysqlStore) UpdateSessionTitle(sessionID int64, title string, generate
 	return nil
 }
 
-func (db *mysqlStore) DeleteSession(sessionID int64) error {
-	_, err := db.conn.Exec("DELETE FROM sessions WHERE id = ?", sessionID)
+func (db *mysqlStore) DeleteSession(chatID int64, sessionID int64) error {
+	result, err := db.conn.Exec("DELETE FROM sessions WHERE id = ? AND chat_id = ?", sessionID, chatID)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
-	_, err = db.conn.Exec("DELETE FROM active_sessions WHERE session_id = ?", sessionID)
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to inspect deleted session count: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("session %d not found for chat %d", sessionID, chatID)
+	}
+	_, err = db.conn.Exec("DELETE FROM active_sessions WHERE chat_id = ? AND session_id = ?", chatID, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to clear active session: %w", err)
 	}
@@ -369,6 +428,9 @@ func (db *mysqlStore) GetAllChats() ([]int64, error) {
 		}
 		chatIDs = append(chatIDs, chatID)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate chats: %w", err)
+	}
 
 	return chatIDs, nil
 }
@@ -413,7 +475,7 @@ func (db *mysqlStore) ExportMemory(filename string) error {
 
 		var sessions []SessionExport
 		for _, sm := range sessionsMeta {
-			msgs, _ := db.LoadSession(sm.ID)
+			msgs, _ := db.LoadSession(chatID, sm.ID)
 			sessions = append(sessions, SessionExport{
 				ID:        sm.ID,
 				Title:     sm.Title,

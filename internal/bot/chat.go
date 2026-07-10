@@ -2,6 +2,8 @@ package bot
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/andatoshiki/omni/internal/conversation"
@@ -48,8 +50,12 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 	var sessionID int64
 	createNew := false
 
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		createNew = true
+	} else if err != nil {
+		c.app.logger.Error("failed to resolve active session", append(c.app.messageLogAttrs(msg), "error", err)...)
+		_, _ = c.reply(ctx, msg, errorMessage(err))
+		return providers.ModelID{}, nil, nil, "", 0, err
 	} else {
 		// SQLite returns string like "2006-01-02 15:04:05" for CURRENT_TIMESTAMP
 		updatedAt, parseErr := time.Parse("2006-01-02 15:04:05", activeSession.UpdatedAt)
@@ -82,7 +88,7 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 	if stored, exists := c.msgHistory.Load(sessionID); exists {
 		history = stored.([]conversation.Message)
 	} else {
-		loaded, err := c.app.store.LoadSession(sessionID)
+		loaded, err := c.app.store.LoadSession(chatID, sessionID)
 		if err != nil {
 			c.app.logger.Warn("failed to load session from database", append(c.app.messageLogAttrs(msg), "error", err)...)
 		} else {
@@ -176,10 +182,10 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, input ChatInput) {
 	msg := input.Messages[0]
 	modelID := c.currentModel(chatID)
-	
+
 	// Create a short prompt to generate a title
 	prompt := "Summarize the user's message in 3 to 5 words to use as a chat title. Do not include quotes or extra text. User message: " + msg.Text
-	
+
 	request := &providers.ChatCompletionStreamRequest{
 		Model:       modelID.Model,
 		Temperature: 0.5,
@@ -226,4 +232,3 @@ func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, inp
 		c.app.logger.Error("failed to save generated title", "error", err)
 	}
 }
-

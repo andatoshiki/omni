@@ -144,7 +144,7 @@ func (s *sessionListStore) ListSessions(chatID int64, limit int) ([]storage.Sess
 
 func (s *sessionListStore) SaveSession(int64, int64, []conversation.Message) error { return nil }
 
-func (s *sessionListStore) LoadSession(int64) ([]conversation.Message, error) { return nil, nil }
+func (s *sessionListStore) LoadSession(int64, int64) ([]conversation.Message, error) { return nil, nil }
 
 func (s *sessionListStore) GetActiveSession(int64) (storage.SessionMeta, error) {
 	return storage.SessionMeta{}, nil
@@ -158,7 +158,7 @@ func (s *sessionListStore) CreateNewSession(int64, string) (storage.SessionMeta,
 
 func (s *sessionListStore) UpdateSessionTitle(int64, string, bool) error { return nil }
 
-func (s *sessionListStore) DeleteSession(int64) error { return nil }
+func (s *sessionListStore) DeleteSession(int64, int64) error { return nil }
 
 func (s *sessionListStore) ClearSessions(int64) error { return nil }
 

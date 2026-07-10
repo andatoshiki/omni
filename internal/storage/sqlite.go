@@ -82,39 +82,65 @@ func newSQLiteStore(cfg config.SQLiteConfig) (Store, error) {
 }
 
 func migrateSQLiteSchema(db *sql.DB) error {
-	var tableName string
-	err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'").Scan(&tableName)
-	if err == sql.ErrNoRows {
-		slog.Default().Info("running database migration to v2 (sessions)")
-
-		_, _ = db.Exec("ALTER TABLE conversations RENAME TO conversations_legacy")
-
-		if _, err := db.Exec(sqliteSchema); err != nil {
-			return err
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO sessions (chat_id, title, title_generated, messages, created_at, updated_at)
-			SELECT chat_id, 'Initial Session', 1, messages, created_at, updated_at
-			FROM conversations_legacy
-		`)
-		if err != nil {
-			slog.Default().Warn("failed to migrate data from legacy conversations", "error", err)
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO active_sessions (chat_id, session_id)
-			SELECT chat_id, id FROM sessions
-		`)
-		if err != nil {
-			slog.Default().Warn("failed to set active sessions from legacy", "error", err)
-		}
-	} else if err != nil {
+	if _, err := db.Exec(sqliteSchema); err != nil {
 		return err
-	} else {
-		if _, err := db.Exec(sqliteSchema); err != nil {
-			return err
-		}
+	}
+	hasLegacy, err := sqliteTableExists(db, "conversations")
+	if err != nil || !hasLegacy {
+		return err
+	}
+
+	slog.Default().Info("running database migration to v2 (sessions)")
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	if err := migrateSQLiteLegacyConversations(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+func sqliteTableExists(db *sql.DB, tableName string) (bool, error) {
+	var name string
+	err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", tableName).Scan(&name)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func migrateSQLiteLegacyConversations(tx *sql.Tx) error {
+	if _, err := tx.Exec(`
+		INSERT INTO sessions (chat_id, title, title_generated, messages, created_at, updated_at)
+		SELECT c.chat_id, 'Initial Session', 1, c.messages, c.created_at, c.updated_at
+		FROM conversations c
+		WHERE NOT EXISTS (
+			SELECT 1 FROM sessions s WHERE s.chat_id = c.chat_id
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to migrate legacy conversations: %w", err)
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO active_sessions (chat_id, session_id)
+		SELECT c.chat_id, MIN(s.id)
+		FROM conversations c
+		JOIN sessions s ON s.chat_id = c.chat_id
+			AND s.title = 'Initial Session'
+			AND s.title_generated = 1
+			AND s.messages = c.messages
+		GROUP BY c.chat_id
+		ON CONFLICT(chat_id) DO UPDATE SET
+			session_id = excluded.session_id
+	`); err != nil {
+		return fmt.Errorf("failed to set active sessions from legacy: %w", err)
+	}
+	if _, err := tx.Exec("ALTER TABLE conversations RENAME TO conversations_legacy"); err != nil {
+		return fmt.Errorf("failed to archive legacy conversations: %w", err)
 	}
 	return nil
 }
@@ -138,11 +164,11 @@ func (db *sqliteStore) SaveSession(chatID int64, sessionID int64, messages []con
 	return nil
 }
 
-func (db *sqliteStore) LoadSession(sessionID int64) ([]conversation.Message, error) {
+func (db *sqliteStore) LoadSession(chatID int64, sessionID int64) ([]conversation.Message, error) {
 	var jsonData string
-	query := "SELECT messages FROM sessions WHERE id = ?"
+	query := "SELECT messages FROM sessions WHERE id = ? AND chat_id = ?"
 
-	err := db.conn.QueryRow(query, sessionID).Scan(&jsonData)
+	err := db.conn.QueryRow(query, sessionID, chatID).Scan(&jsonData)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return []conversation.Message{}, nil
@@ -175,6 +201,9 @@ func (db *sqliteStore) GetActiveSession(chatID int64) (SessionMeta, error) {
 }
 
 func (db *sqliteStore) SetActiveSession(chatID int64, sessionID int64) error {
+	if err := db.ensureSessionBelongsToChat(chatID, sessionID); err != nil {
+		return err
+	}
 	query := `
 		INSERT INTO active_sessions (chat_id, session_id)
 		VALUES (?, ?)
@@ -184,6 +213,18 @@ func (db *sqliteStore) SetActiveSession(chatID int64, sessionID int64) error {
 	_, err := db.conn.Exec(query, chatID, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to set active session: %w", err)
+	}
+	return nil
+}
+
+func (db *sqliteStore) ensureSessionBelongsToChat(chatID int64, sessionID int64) error {
+	var id int64
+	err := db.conn.QueryRow("SELECT id FROM sessions WHERE id = ? AND chat_id = ?", sessionID, chatID).Scan(&id)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("session %d not found for chat %d", sessionID, chatID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to verify session ownership: %w", err)
 	}
 	return nil
 }
@@ -238,6 +279,9 @@ func (db *sqliteStore) ListSessions(chatID int64, limit int) ([]SessionMeta, err
 		}
 		sessions = append(sessions, meta)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate sessions: %w", err)
+	}
 	return sessions, nil
 }
 
@@ -260,12 +304,19 @@ func (db *sqliteStore) UpdateSessionTitle(sessionID int64, title string, generat
 	return nil
 }
 
-func (db *sqliteStore) DeleteSession(sessionID int64) error {
-	_, err := db.conn.Exec("DELETE FROM sessions WHERE id = ?", sessionID)
+func (db *sqliteStore) DeleteSession(chatID int64, sessionID int64) error {
+	result, err := db.conn.Exec("DELETE FROM sessions WHERE id = ? AND chat_id = ?", sessionID, chatID)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
-	_, err = db.conn.Exec("DELETE FROM active_sessions WHERE session_id = ?", sessionID)
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to inspect deleted session count: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("session %d not found for chat %d", sessionID, chatID)
+	}
+	_, err = db.conn.Exec("DELETE FROM active_sessions WHERE chat_id = ? AND session_id = ?", chatID, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to clear active session: %w", err)
 	}
@@ -328,6 +379,9 @@ func (db *sqliteStore) GetAllChats() ([]int64, error) {
 		}
 		chatIDs = append(chatIDs, chatID)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate chats: %w", err)
+	}
 	return chatIDs, nil
 }
 
@@ -369,7 +423,7 @@ func (db *sqliteStore) ExportMemory(filename string) error {
 
 		var sessions []SessionExport
 		for _, sm := range sessionsMeta {
-			msgs, _ := db.LoadSession(sm.ID)
+			msgs, _ := db.LoadSession(chatID, sm.ID)
 			sessions = append(sessions, SessionExport{
 				ID:        sm.ID,
 				Title:     sm.Title,
