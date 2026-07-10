@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -27,8 +28,10 @@ type Params struct {
 	Temperature      float64
 	MaxReplyTokens   int
 	MaxContextTokens int
-	HistorySize      int
-	SenderContext    string
+	HistorySize          int
+	SenderContext        string
+	SessionTimeout       time.Duration
+	MaxSessionsDisplayed int
 
 	AllowedUserIDs  []int64
 	AdminUserIDs    []int64
@@ -83,11 +86,13 @@ func (p *Params) Load(filename string) error {
 			},
 		},
 		Global: globalConfig{
-			Temperature:      1.3,
-			MaxReplyTokens:   2048,
-			MaxContextTokens: 8192,
-			HistorySize:      4,
-			SenderContext:    "groups",
+			Temperature:          1.3,
+			MaxReplyTokens:       2048,
+			MaxContextTokens:     8192,
+			HistorySize:          4,
+			SenderContext:        "groups",
+			SessionTimeout:       "15m",
+			MaxSessionsDisplayed: 10,
 		},
 	}
 
@@ -116,19 +121,26 @@ func (p *Params) Load(filename string) error {
 		databaseConfigOut.SQLite.Path = databasePath
 	}
 
+	sessionTimeout, err := time.ParseDuration(cfg.Global.SessionTimeout)
+	if err != nil {
+		return fmt.Errorf("invalid global.session_timeout: %w", err)
+	}
+
 	*p = Params{
-		Providers:        cfg.Providers,
-		BotToken:         strings.TrimSpace(cfg.Telegram.BotToken),
-		Database:         databaseConfigOut,
-		InitialPrompt:    cfg.Global.InitialPrompt,
-		Temperature:      cfg.Global.Temperature,
-		MaxReplyTokens:   cfg.Global.MaxReplyTokens,
-		MaxContextTokens: cfg.Global.MaxContextTokens,
-		HistorySize:      cfg.Global.HistorySize,
-		SenderContext:    cfg.Global.SenderContext,
-		AllowedUserIDs:   deduplicateIDs(cfg.Telegram.AllowedUserIDs),
-		AdminUserIDs:     deduplicateIDs(cfg.Telegram.AdminUserIDs),
-		AllowedGroupIDs:  deduplicateIDs(cfg.Telegram.AllowedGroupIDs),
+		Providers:            cfg.Providers,
+		BotToken:             strings.TrimSpace(cfg.Telegram.BotToken),
+		Database:             databaseConfigOut,
+		InitialPrompt:        cfg.Global.InitialPrompt,
+		Temperature:          cfg.Global.Temperature,
+		MaxReplyTokens:       cfg.Global.MaxReplyTokens,
+		MaxContextTokens:     cfg.Global.MaxContextTokens,
+		HistorySize:          cfg.Global.HistorySize,
+		SenderContext:        cfg.Global.SenderContext,
+		SessionTimeout:       sessionTimeout,
+		MaxSessionsDisplayed: cfg.Global.MaxSessionsDisplayed,
+		AllowedUserIDs:       deduplicateIDs(cfg.Telegram.AllowedUserIDs),
+		AdminUserIDs:         deduplicateIDs(cfg.Telegram.AdminUserIDs),
+		AllowedGroupIDs:      deduplicateIDs(cfg.Telegram.AllowedGroupIDs),
 	}
 
 	for _, id := range p.AdminUserIDs {

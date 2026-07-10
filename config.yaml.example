@@ -186,6 +186,8 @@ global:
   max_context_tokens: 8192
   history_size: 4
   sender_context: "groups"
+  session_timeout: "15m"
+  max_sessions_displayed: 10
 
 telegram:
   bot_token: ""
