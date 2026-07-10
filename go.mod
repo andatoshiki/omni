@@ -21,7 +21,7 @@ require (
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
 	github.com/xuri/excelize/v2 v2.10.1
 	github.com/yuin/goldmark v1.8.2
-	google.golang.org/genai v1.61.0
+	google.golang.org/genai v1.62.0
 	modernc.org/sqlite v1.53.0
 )
 
