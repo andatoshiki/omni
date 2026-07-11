@@ -278,6 +278,9 @@ func (r *Registry) FindModelID(modelName string) (ModelID, bool) {
 	for _, id := range r.AllModelIDs() {
 		if id.Model == modelName {
 			if found {
+				// Reject duplicate bare-name matches so callers must use an
+				// explicit provider-qualified selector instead of silently
+				// routing to the first configured provider.
 				return ModelID{}, false
 			}
 			match = id
@@ -285,6 +288,29 @@ func (r *Registry) FindModelID(modelName string) (ModelID, bool) {
 		}
 	}
 	return match, found
+}
+
+// IsModelNameAmbiguous reports whether a bare model name matches more than one
+// enabled provider.
+func (r *Registry) IsModelNameAmbiguous(modelName string) bool {
+	if r == nil {
+		return false
+	}
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return false
+	}
+	matches := 0
+	for _, id := range r.AllModelIDs() {
+		if id.Model != modelName {
+			continue
+		}
+		matches++
+		if matches > 1 {
+			return true
+		}
+	}
+	return false
 }
 
 // LookupModelConfig returns the configured pricing for a given ModelID,

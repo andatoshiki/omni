@@ -103,4 +103,10 @@ func TestRegistryFindModelIDSupportsQualifiedAndUniqueNames(t *testing.T) {
 	if got, ok := registry.FindModelID("shared"); ok {
 		t.Fatalf("FindModelID(ambiguous) = (%#v, %v), want not found", got, ok)
 	}
+	if !registry.IsModelNameAmbiguous("shared") {
+		t.Fatal("IsModelNameAmbiguous(shared) = false, want true")
+	}
+	if registry.IsModelNameAmbiguous("claude-sonnet") {
+		t.Fatal("IsModelNameAmbiguous(claude-sonnet) = true, want false")
+	}
 }
