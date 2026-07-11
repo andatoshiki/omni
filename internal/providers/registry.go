@@ -15,7 +15,10 @@ import (
 	"github.com/andatoshiki/omni/internal/config"
 	"github.com/andatoshiki/omni/internal/providers/platforms"
 	anthropicplatform "github.com/andatoshiki/omni/internal/providers/platforms/anthropic"
+	azureplatform "github.com/andatoshiki/omni/internal/providers/platforms/azureopenai"
 	"github.com/andatoshiki/omni/internal/providers/platforms/bedrock"
+	cloudflareplatform "github.com/andatoshiki/omni/internal/providers/platforms/cloudflare"
+	cohereplatform "github.com/andatoshiki/omni/internal/providers/platforms/cohere"
 	customplatform "github.com/andatoshiki/omni/internal/providers/platforms/custom"
 	deepseekplatform "github.com/andatoshiki/omni/internal/providers/platforms/deepseek"
 	googleplatform "github.com/andatoshiki/omni/internal/providers/platforms/google"
@@ -25,9 +28,6 @@ import (
 	openaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/openai"
 	togetherplatform "github.com/andatoshiki/omni/internal/providers/platforms/together"
 	xaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/xai"
-	azureplatform "github.com/andatoshiki/omni/internal/providers/platforms/azureopenai"
-	cloudflareplatform "github.com/andatoshiki/omni/internal/providers/platforms/cloudflare"
-	cohereplatform "github.com/andatoshiki/omni/internal/providers/platforms/cohere"
 )
 
 // Provider holds the runtime configuration for a single AI provider.
@@ -53,21 +53,21 @@ type Registry struct {
 }
 
 var defaultBaseURLs = map[string]string{
-	config.ProviderTypeDeepSeek:  "https://api.deepseek.com",
-	config.ProviderTypeOpenAI:    "https://api.openai.com/v1",
-	config.ProviderTypeCustom:    "https://api.openai.com/v1",
-	config.ProviderTypeGoogle:     "https://generativelanguage.googleapis.com/v1beta/openai/",
-	config.ProviderTypeAnthropic:  "https://api.anthropic.com",
-	config.ProviderTypeXAI:        "https://api.x.ai/v1",
-	config.ProviderTypePerplexity: "https://api.perplexity.ai",
-	config.ProviderTypeOllama:     "http://localhost:11434/v1",
-	config.ProviderTypeGroq:       "https://api.groq.com/openai/v1",
-	config.ProviderTypeTogether:   "https://api.together.xyz/v1",
-	config.ProviderTypeMistral:    "https://api.mistral.ai/v1",
-	config.ProviderTypeAzure:      "https://%s.openai.azure.com",
-	config.ProviderTypeCloudflare: "https://api.cloudflare.com/client/v4/accounts/%s/ai/run",
-	config.ProviderTypeCohere:     "https://api.cohere.com/v2",
-	config.ProviderTypeHuggingFace:"https://api-inference.huggingface.co/v1",
+	config.ProviderTypeDeepSeek:    "https://api.deepseek.com",
+	config.ProviderTypeOpenAI:      "https://api.openai.com/v1",
+	config.ProviderTypeCustom:      "https://api.openai.com/v1",
+	config.ProviderTypeGoogle:      "https://generativelanguage.googleapis.com/v1beta/openai/",
+	config.ProviderTypeAnthropic:   "https://api.anthropic.com",
+	config.ProviderTypeXAI:         "https://api.x.ai/v1",
+	config.ProviderTypePerplexity:  "https://api.perplexity.ai",
+	config.ProviderTypeOllama:      "http://localhost:11434/v1",
+	config.ProviderTypeGroq:        "https://api.groq.com/openai/v1",
+	config.ProviderTypeTogether:    "https://api.together.xyz/v1",
+	config.ProviderTypeMistral:     "https://api.mistral.ai/v1",
+	config.ProviderTypeAzure:       "https://%s.openai.azure.com",
+	config.ProviderTypeCloudflare:  "https://api.cloudflare.com/client/v4/accounts/%s/ai/run",
+	config.ProviderTypeCohere:      "https://api.cohere.com",
+	config.ProviderTypeHuggingFace: "https://api-inference.huggingface.co/v1",
 }
 
 // NewRegistry initializes the provider registry from config.

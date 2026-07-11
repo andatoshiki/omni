@@ -239,6 +239,35 @@ telegram:
 	}
 }
 
+func TestParamsLoadSupportsCohereAndHuggingFaceProviders(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: cohere-main
+    type: cohere
+    api_key: cohere-test
+    models:
+      - name: command-r
+  - name: hf-main
+    type: huggingface
+    api_key: hf-test
+    models:
+      - name: openai/gpt-oss-20b
+telegram:
+  bot_token: 123:test
+`)
+
+	var got Params
+	if err := got.Load(filename); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.Providers[0].EffectiveType() != ProviderTypeCohere {
+		t.Fatalf("EffectiveType() = %q, want cohere", got.Providers[0].EffectiveType())
+	}
+	if got.Providers[1].EffectiveType() != ProviderTypeHuggingFace {
+		t.Fatalf("EffectiveType() = %q, want huggingface", got.Providers[1].EffectiveType())
+	}
+}
+
 func TestParamsLoadRejectsAnthropicTemperatureAboveOne(t *testing.T) {
 	tests := []struct {
 		name        string

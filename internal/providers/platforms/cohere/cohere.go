@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
+	"github.com/andatoshiki/omni/internal/providers/platforms"
 	cohere "github.com/cohere-ai/cohere-go/v2"
 	cohereclient "github.com/cohere-ai/cohere-go/v2/client"
 	coherecore "github.com/cohere-ai/cohere-go/v2/core"
 	cohereoption "github.com/cohere-ai/cohere-go/v2/option"
-	"github.com/andatoshiki/omni/internal/providers/platforms"
 )
 
 type Adapter struct {
@@ -45,8 +46,11 @@ func (a Adapter) CreateChatCompletionStream(
 
 	var messages []*cohere.ChatMessageV2
 	for _, msg := range request.Messages {
-		strContent, _ := msg.Content.(string)
-		
+		strContent, unsupported := messageTextContent(msg.Content)
+		if len(unsupported) > 0 {
+			return nil, &platforms.UnsupportedMediaError{Types: unsupported}
+		}
+
 		switch msg.Role {
 		case platforms.RoleSystem:
 			messages = append(messages, &cohere.ChatMessageV2{
@@ -82,7 +86,7 @@ func (a Adapter) CreateChatCompletionStream(
 		Model:    request.Model,
 		Messages: messages,
 	}
-	
+
 	if request.MaxTokens > 0 {
 		req.MaxTokens = cohere.Int(request.MaxTokens)
 	}
@@ -119,7 +123,7 @@ func (s *messageStream) Recv() (*platforms.ChatCompletionStreamResponse, error) 
 				},
 			}, nil
 		}
-		
+
 		if event.MessageEnd != nil && event.MessageEnd.Delta != nil && event.MessageEnd.Delta.Usage != nil && event.MessageEnd.Delta.Usage.BilledUnits != nil {
 			return &platforms.ChatCompletionStreamResponse{
 				Usage: &platforms.TokenUsage{
@@ -134,4 +138,42 @@ func (s *messageStream) Recv() (*platforms.ChatCompletionStreamResponse, error) 
 
 func (s *messageStream) Close() error {
 	return s.stream.Close()
+}
+
+func messageTextContent(content any) (string, []string) {
+	switch typed := content.(type) {
+	case nil:
+		return "", nil
+	case string:
+		return typed, nil
+	case []platforms.ChatContentPart:
+		textParts := make([]string, 0, len(typed))
+		unsupported := make(map[string]struct{})
+		for _, part := range typed {
+			if part.Type == "text" {
+				textParts = append(textParts, part.Text)
+				continue
+			}
+			mediaType := strings.TrimSpace(part.Type)
+			if mediaType == "" && part.MediaData != nil {
+				mediaType = strings.TrimSpace(part.MediaData.MIMEType)
+			}
+			if mediaType == "" {
+				mediaType = "unknown"
+			}
+			unsupported[mediaType] = struct{}{}
+		}
+
+		if len(unsupported) > 0 {
+			types := make([]string, 0, len(unsupported))
+			for mediaType := range unsupported {
+				types = append(types, mediaType)
+			}
+			slices.Sort(types)
+			return "", types
+		}
+		return strings.Join(textParts, "\n"), nil
+	default:
+		return "", []string{"unknown"}
+	}
 }

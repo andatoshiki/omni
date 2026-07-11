@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	DefaultDatabasePath    = "omni.db"
+	DefaultDatabasePath = "omni.db"
 )
 
 type Params struct {
@@ -24,10 +24,10 @@ type Params struct {
 	BotToken string
 	Database DatabaseConfig
 
-	InitialPrompt    string
-	Temperature      float64
-	MaxReplyTokens   int
-	MaxContextTokens int
+	InitialPrompt        string
+	Temperature          float64
+	MaxReplyTokens       int
+	MaxContextTokens     int
 	HistorySize          int
 	SenderContext        string
 	SessionTimeout       time.Duration
@@ -206,9 +206,9 @@ func (p *Params) validate() error {
 		providerNames[providerName] = i
 
 		switch prov.EffectiveType() {
-		case ProviderTypeDeepSeek, ProviderTypeOpenAI, ProviderTypeCustom, ProviderTypeGoogle, ProviderTypeAnthropic, ProviderTypeXAI, ProviderTypePerplexity, ProviderTypeOllama, ProviderTypeGroq, ProviderTypeTogether, ProviderTypeMistral, ProviderTypeBedrock:
+		case ProviderTypeDeepSeek, ProviderTypeOpenAI, ProviderTypeCustom, ProviderTypeGoogle, ProviderTypeAnthropic, ProviderTypeXAI, ProviderTypePerplexity, ProviderTypeOllama, ProviderTypeGroq, ProviderTypeTogether, ProviderTypeMistral, ProviderTypeBedrock, ProviderTypeAzure, ProviderTypeCloudflare, ProviderTypeCohere, ProviderTypeHuggingFace:
 		default:
-			return fmt.Errorf("providers[%d].type must be one of deepseek, openai, custom, google, anthropic, xai, perplexity, ollama, groq, together, mistral, bedrock (provider: %s)", i, providerName)
+			return fmt.Errorf("providers[%d].type must be one of deepseek, openai, custom, google, anthropic, xai, perplexity, ollama, groq, together, mistral, bedrock, azure, cloudflare, cohere, huggingface (provider: %s)", i, providerName)
 		}
 
 		if !prov.IsEnabled() {
