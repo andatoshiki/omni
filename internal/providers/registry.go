@@ -255,6 +255,24 @@ func (r *Registry) AllModelIDs() []ModelID {
 	return ids
 }
 
+// FindModelID searches all enabled providers for a model matching the exact name.
+// Returns the first match found based on config order.
+func (r *Registry) FindModelID(modelName string) (ModelID, bool) {
+	if r == nil {
+		return ModelID{}, false
+	}
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return ModelID{}, false
+	}
+	for _, id := range r.AllModelIDs() {
+		if id.Model == modelName {
+			return id, true
+		}
+	}
+	return ModelID{}, false
+}
+
 // LookupModelConfig returns the configured pricing for a given ModelID,
 // or nil if not found.
 func (r *Registry) LookupModelConfig(id ModelID) *config.ModelConfig {

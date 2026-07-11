@@ -9,4 +9,5 @@ type globalConfig struct {
 	SenderContext          string  `yaml:"sender_context"`
 	SessionTimeout         string  `yaml:"session_timeout"`
 	MaxSessionsDisplayed   int     `yaml:"max_sessions_displayed"`
+	TitleModel             string  `yaml:"title_model"`
 }

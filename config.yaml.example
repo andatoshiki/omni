@@ -188,6 +188,10 @@ global:
   sender_context: "groups"
   session_timeout: "15m"
   max_sessions_displayed: 10
+  
+  # (Optional) A dedicated fast model used exclusively to generate background titles.
+  # If left blank, it will fallback to generating titles using the current active model.
+  # title_model: "gemini-2.5-flash"
 
 telegram:
   bot_token: ""

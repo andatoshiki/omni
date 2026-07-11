@@ -32,6 +32,7 @@ type Params struct {
 	SenderContext        string
 	SessionTimeout       time.Duration
 	MaxSessionsDisplayed int
+	TitleModel           string
 
 	AllowedUserIDs  []int64
 	AdminUserIDs    []int64
@@ -138,6 +139,7 @@ func (p *Params) Load(filename string) error {
 		SenderContext:        cfg.Global.SenderContext,
 		SessionTimeout:       sessionTimeout,
 		MaxSessionsDisplayed: cfg.Global.MaxSessionsDisplayed,
+		TitleModel:           strings.TrimSpace(cfg.Global.TitleModel),
 		AllowedUserIDs:       deduplicateIDs(cfg.Telegram.AllowedUserIDs),
 		AdminUserIDs:         deduplicateIDs(cfg.Telegram.AdminUserIDs),
 		AllowedGroupIDs:      deduplicateIDs(cfg.Telegram.AllowedGroupIDs),

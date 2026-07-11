@@ -182,7 +182,16 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 
 func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, input ChatInput) {
 	msg := input.Messages[0]
+	
+	// Fallback to active model, unless a dedicated title_model is configured
 	modelID := c.currentModel(chatID)
+	if titleModel := c.app.params.TitleModel; titleModel != "" {
+		if dedicatedID, ok := c.app.providers.FindModelID(titleModel); ok {
+			modelID = dedicatedID
+		} else {
+			c.app.logger.Warn("dedicated title_model not found in configured providers, falling back to active model", "title_model", titleModel)
+		}
+	}
 
 	// Create a short prompt to generate a title
 	prompt := "Summarize the user's message in 3 to 5 words to use as a chat title. Do not include quotes or extra text. User message: " + msg.Text
