@@ -15,6 +15,8 @@ type ChatCompletionStreamRequest = platforms.ChatCompletionStreamRequest
 type ChatCompletionStream = platforms.ChatCompletionStream
 type TokenUsage = platforms.TokenUsage
 
+const ModelIDSeparator = " / "
+
 const (
 	RoleSystem    = platforms.RoleSystem
 	RoleUser      = platforms.RoleUser
@@ -28,7 +30,7 @@ type ModelID struct {
 }
 
 func (m ModelID) String() string {
-	return m.Provider + " / " + m.Model
+	return m.Provider + ModelIDSeparator + m.Model
 }
 
 func (m ModelID) CallbackData() string {

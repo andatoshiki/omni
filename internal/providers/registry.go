@@ -266,7 +266,7 @@ func (r *Registry) FindModelID(modelName string) (ModelID, bool) {
 	if modelName == "" {
 		return ModelID{}, false
 	}
-	if provider, model, ok := strings.Cut(modelName, " / "); ok {
+	if provider, model, ok := strings.Cut(modelName, ModelIDSeparator); ok {
 		id := ModelID{Provider: strings.TrimSpace(provider), Model: strings.TrimSpace(model)}
 		if _, err := r.Resolve(id); err == nil {
 			return id, true
