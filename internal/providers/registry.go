@@ -27,6 +27,7 @@ import (
 	xaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/xai"
 	azureplatform "github.com/andatoshiki/omni/internal/providers/platforms/azureopenai"
 	cloudflareplatform "github.com/andatoshiki/omni/internal/providers/platforms/cloudflare"
+	cohereplatform "github.com/andatoshiki/omni/internal/providers/platforms/cohere"
 )
 
 // Provider holds the runtime configuration for a single AI provider.
@@ -65,6 +66,8 @@ var defaultBaseURLs = map[string]string{
 	config.ProviderTypeMistral:    "https://api.mistral.ai/v1",
 	config.ProviderTypeAzure:      "https://%s.openai.azure.com",
 	config.ProviderTypeCloudflare: "https://api.cloudflare.com/client/v4/accounts/%s/ai/run",
+	config.ProviderTypeCohere:     "https://api.cohere.com/v2",
+	config.ProviderTypeHuggingFace:"https://api-inference.huggingface.co/v1",
 }
 
 // NewRegistry initializes the provider registry from config.
@@ -164,6 +167,10 @@ func adapterForType(cfg config.ProviderConfig) (Adapter, error) {
 		return azureplatform.Adapter{APIVersion: cfg.APIVersion, HTTPClient: client}, nil
 	case config.ProviderTypeCloudflare:
 		return cloudflareplatform.Adapter{AccountID: cfg.CloudflareAccountID, HTTPClient: client}, nil
+	case config.ProviderTypeCohere:
+		return cohereplatform.Adapter{HTTPClient: client}, nil
+	case config.ProviderTypeHuggingFace:
+		return openaiplatform.Adapter{HTTPClient: client}, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type %q", providerType)
 	}
