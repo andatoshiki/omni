@@ -18,6 +18,7 @@ import (
 	azureplatform "github.com/andatoshiki/omni/internal/providers/platforms/azureopenai"
 	"github.com/andatoshiki/omni/internal/providers/platforms/bedrock"
 	cloudflareplatform "github.com/andatoshiki/omni/internal/providers/platforms/cloudflare"
+	cohereplatform "github.com/andatoshiki/omni/internal/providers/platforms/cohere"
 	customplatform "github.com/andatoshiki/omni/internal/providers/platforms/custom"
 	deepseekplatform "github.com/andatoshiki/omni/internal/providers/platforms/deepseek"
 	googleplatform "github.com/andatoshiki/omni/internal/providers/platforms/google"
@@ -52,19 +53,21 @@ type Registry struct {
 }
 
 var defaultBaseURLs = map[string]string{
-	config.ProviderTypeDeepSeek:  "https://api.deepseek.com",
-	config.ProviderTypeOpenAI:    "https://api.openai.com/v1",
-	config.ProviderTypeCustom:    "https://api.openai.com/v1",
-	config.ProviderTypeGoogle:     "https://generativelanguage.googleapis.com/v1beta/openai/",
-	config.ProviderTypeAnthropic:  "https://api.anthropic.com",
-	config.ProviderTypeXAI:        "https://api.x.ai/v1",
-	config.ProviderTypePerplexity: "https://api.perplexity.ai",
-	config.ProviderTypeOllama:     "http://localhost:11434/v1",
-	config.ProviderTypeGroq:       "https://api.groq.com/openai/v1",
-	config.ProviderTypeTogether:   "https://api.together.xyz/v1",
-	config.ProviderTypeMistral:    "https://api.mistral.ai/v1",
-	config.ProviderTypeAzure:      "https://%s.openai.azure.com",
-	config.ProviderTypeCloudflare: "https://api.cloudflare.com/client/v4/accounts/%s/ai/run",
+	config.ProviderTypeDeepSeek:    "https://api.deepseek.com",
+	config.ProviderTypeOpenAI:      "https://api.openai.com/v1",
+	config.ProviderTypeCustom:      "https://api.openai.com/v1",
+	config.ProviderTypeGoogle:      "https://generativelanguage.googleapis.com/v1beta/openai/",
+	config.ProviderTypeAnthropic:   "https://api.anthropic.com",
+	config.ProviderTypeXAI:         "https://api.x.ai/v1",
+	config.ProviderTypePerplexity:  "https://api.perplexity.ai",
+	config.ProviderTypeOllama:      "http://localhost:11434/v1",
+	config.ProviderTypeGroq:        "https://api.groq.com/openai/v1",
+	config.ProviderTypeTogether:    "https://api.together.xyz/v1",
+	config.ProviderTypeMistral:     "https://api.mistral.ai/v1",
+	config.ProviderTypeAzure:       "https://%s.openai.azure.com",
+	config.ProviderTypeCloudflare:  "https://api.cloudflare.com/client/v4/accounts/%s/ai/run",
+	config.ProviderTypeCohere:      "https://api.cohere.com",
+	config.ProviderTypeHuggingFace: "https://api-inference.huggingface.co/v1",
 }
 
 // NewRegistry initializes the provider registry from config.
@@ -164,6 +167,10 @@ func adapterForType(cfg config.ProviderConfig) (Adapter, error) {
 		return azureplatform.Adapter{APIVersion: cfg.APIVersion, HTTPClient: client}, nil
 	case config.ProviderTypeCloudflare:
 		return cloudflareplatform.Adapter{AccountID: cfg.CloudflareAccountID, HTTPClient: client}, nil
+	case config.ProviderTypeCohere:
+		return cohereplatform.Adapter{HTTPClient: client}, nil
+	case config.ProviderTypeHuggingFace:
+		return openaiplatform.Adapter{HTTPClient: client}, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type %q", providerType)
 	}

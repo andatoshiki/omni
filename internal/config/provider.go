@@ -20,6 +20,8 @@ const (
 	ProviderTypeBedrock    = "bedrock"
 	ProviderTypeAzure      = "azure"
 	ProviderTypeCloudflare = "cloudflare"
+	ProviderTypeCohere     = "cohere"
+	ProviderTypeHuggingFace= "huggingface"
 )
 
 type ProviderConfig struct {
@@ -76,6 +78,10 @@ func (p ProviderConfig) EffectiveType() string {
 		return ProviderTypeAzure
 	case ProviderTypeCloudflare:
 		return ProviderTypeCloudflare
+	case ProviderTypeCohere:
+		return ProviderTypeCohere
+	case ProviderTypeHuggingFace:
+		return ProviderTypeHuggingFace
 	default:
 		return ProviderTypeCustom
 	}

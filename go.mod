@@ -15,6 +15,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.25
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.26
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.54.2
+	github.com/cohere-ai/cohere-go/v2 v2.18.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/lib/pq v1.12.3
