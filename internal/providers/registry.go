@@ -15,7 +15,9 @@ import (
 	"github.com/andatoshiki/omni/internal/config"
 	"github.com/andatoshiki/omni/internal/providers/platforms"
 	anthropicplatform "github.com/andatoshiki/omni/internal/providers/platforms/anthropic"
+	azureplatform "github.com/andatoshiki/omni/internal/providers/platforms/azureopenai"
 	"github.com/andatoshiki/omni/internal/providers/platforms/bedrock"
+	cloudflareplatform "github.com/andatoshiki/omni/internal/providers/platforms/cloudflare"
 	customplatform "github.com/andatoshiki/omni/internal/providers/platforms/custom"
 	deepseekplatform "github.com/andatoshiki/omni/internal/providers/platforms/deepseek"
 	googleplatform "github.com/andatoshiki/omni/internal/providers/platforms/google"
@@ -25,8 +27,6 @@ import (
 	openaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/openai"
 	togetherplatform "github.com/andatoshiki/omni/internal/providers/platforms/together"
 	xaiplatform "github.com/andatoshiki/omni/internal/providers/platforms/xai"
-	azureplatform "github.com/andatoshiki/omni/internal/providers/platforms/azureopenai"
-	cloudflareplatform "github.com/andatoshiki/omni/internal/providers/platforms/cloudflare"
 )
 
 // Provider holds the runtime configuration for a single AI provider.
@@ -52,9 +52,9 @@ type Registry struct {
 }
 
 var defaultBaseURLs = map[string]string{
-	config.ProviderTypeDeepSeek:  "https://api.deepseek.com",
-	config.ProviderTypeOpenAI:    "https://api.openai.com/v1",
-	config.ProviderTypeCustom:    "https://api.openai.com/v1",
+	config.ProviderTypeDeepSeek:   "https://api.deepseek.com",
+	config.ProviderTypeOpenAI:     "https://api.openai.com/v1",
+	config.ProviderTypeCustom:     "https://api.openai.com/v1",
 	config.ProviderTypeGoogle:     "https://generativelanguage.googleapis.com/v1beta/openai/",
 	config.ProviderTypeAnthropic:  "https://api.anthropic.com",
 	config.ProviderTypeXAI:        "https://api.x.ai/v1",
@@ -255,8 +255,9 @@ func (r *Registry) AllModelIDs() []ModelID {
 	return ids
 }
 
-// FindModelID searches all enabled providers for a model matching the exact name.
-// Returns the first match found based on config order.
+// FindModelID searches enabled providers for a configured model.
+// It accepts either a bare model name when that name is unique across providers,
+// or the exact "provider / model" string returned by ModelID.String().
 func (r *Registry) FindModelID(modelName string) (ModelID, bool) {
 	if r == nil {
 		return ModelID{}, false
@@ -265,12 +266,25 @@ func (r *Registry) FindModelID(modelName string) (ModelID, bool) {
 	if modelName == "" {
 		return ModelID{}, false
 	}
-	for _, id := range r.AllModelIDs() {
-		if id.Model == modelName {
+	if provider, model, ok := strings.Cut(modelName, " / "); ok {
+		id := ModelID{Provider: strings.TrimSpace(provider), Model: strings.TrimSpace(model)}
+		if _, err := r.Resolve(id); err == nil {
 			return id, true
 		}
+		return ModelID{}, false
 	}
-	return ModelID{}, false
+	var match ModelID
+	found := false
+	for _, id := range r.AllModelIDs() {
+		if id.Model == modelName {
+			if found {
+				return ModelID{}, false
+			}
+			match = id
+			found = true
+		}
+	}
+	return match, found
 }
 
 // LookupModelConfig returns the configured pricing for a given ModelID,

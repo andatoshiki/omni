@@ -84,3 +84,23 @@ func TestRegistryPreservesConfigOrderForDefaultModel(t *testing.T) {
 		t.Fatalf("DefaultModelID() = %#v", got)
 	}
 }
+
+func TestRegistryFindModelIDSupportsQualifiedAndUniqueNames(t *testing.T) {
+	registry, err := NewRegistry([]config.ProviderConfig{
+		{Name: "openai", Type: "custom", APIKey: "one", Models: []config.ModelConfig{{Name: "gpt-4o"}, {Name: "shared"}}},
+		{Name: "anthropic", Type: "custom", APIKey: "two", Models: []config.ModelConfig{{Name: "claude-sonnet"}, {Name: "shared"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, ok := registry.FindModelID("claude-sonnet"); !ok || got != (ModelID{Provider: "anthropic", Model: "claude-sonnet"}) {
+		t.Fatalf("FindModelID(unique) = (%#v, %v)", got, ok)
+	}
+	if got, ok := registry.FindModelID("openai / shared"); !ok || got != (ModelID{Provider: "openai", Model: "shared"}) {
+		t.Fatalf("FindModelID(qualified) = (%#v, %v)", got, ok)
+	}
+	if got, ok := registry.FindModelID("shared"); ok {
+		t.Fatalf("FindModelID(ambiguous) = (%#v, %v), want not found", got, ok)
+	}
+}

@@ -191,6 +191,8 @@ global:
   
   # (Optional) A dedicated fast model used exclusively to generate background titles.
   # If left blank, it will fallback to generating titles using the current active model.
+  # Use either a unique bare model name, or "provider / model" if multiple
+  # enabled providers expose the same model name.
   # title_model: "gemini-2.5-flash"
 
 telegram:
