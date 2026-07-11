@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/andatoshiki/omni/internal/conversation"
@@ -213,6 +214,9 @@ func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, inp
 	for {
 		chunk, err := stream.Recv()
 		if err != nil {
+			if err != io.EOF {
+				c.app.logger.Warn("error while receiving title stream", "error", err)
+			}
 			break
 		}
 		for _, choice := range chunk.Choices {
