@@ -201,7 +201,6 @@ func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, inp
 	request := &providers.ChatCompletionStreamRequest{
 		Model:       modelID.Model,
 		Temperature: 0.5,
-		MaxTokens:   50,
 		Messages: []providers.ChatMessage{
 			{Role: providers.RoleUser, Content: prompt},
 		},
