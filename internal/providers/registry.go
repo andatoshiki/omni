@@ -52,9 +52,9 @@ type Registry struct {
 }
 
 var defaultBaseURLs = map[string]string{
-	config.ProviderTypeDeepSeek:   "https://api.deepseek.com",
-	config.ProviderTypeOpenAI:     "https://api.openai.com/v1",
-	config.ProviderTypeCustom:     "https://api.openai.com/v1",
+	config.ProviderTypeDeepSeek:  "https://api.deepseek.com",
+	config.ProviderTypeOpenAI:    "https://api.openai.com/v1",
+	config.ProviderTypeCustom:    "https://api.openai.com/v1",
 	config.ProviderTypeGoogle:     "https://generativelanguage.googleapis.com/v1beta/openai/",
 	config.ProviderTypeAnthropic:  "https://api.anthropic.com",
 	config.ProviderTypeXAI:        "https://api.x.ai/v1",
@@ -267,7 +267,7 @@ func (r *Registry) FindModelID(modelName string) (ModelID, bool) {
 		return ModelID{}, false
 	}
 	if provider, model, ok := strings.Cut(modelName, ModelIDSeparator); ok {
-		id := ModelID{Provider: strings.TrimSpace(provider), Model: strings.TrimSpace(model)}
+		id := ModelID{Provider: provider, Model: model}
 		if _, err := r.Resolve(id); err == nil {
 			return id, true
 		}

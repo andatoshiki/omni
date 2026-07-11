@@ -189,7 +189,7 @@ func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, inp
 		if dedicatedID, ok := c.app.providers.FindModelID(titleModel); ok {
 			modelID = dedicatedID
 		} else if c.app.providers.IsModelNameAmbiguous(titleModel) {
-			c.app.logger.Warn("dedicated title_model matches multiple configured providers, use \"provider / model\" to disambiguate; falling back to active model", "title_model", titleModel)
+			c.app.logger.Warn("dedicated title_model matches multiple configured providers; use `provider / model` to disambiguate. Falling back to active model", "title_model", titleModel)
 		} else {
 			c.app.logger.Warn("dedicated title_model not found in configured providers, falling back to active model", "title_model", titleModel)
 		}
