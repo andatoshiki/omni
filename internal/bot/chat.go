@@ -195,7 +195,7 @@ func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, inp
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	stream, err := c.app.providers.CreateChatCompletionStream(ctx, modelID, request)
