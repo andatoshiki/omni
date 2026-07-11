@@ -201,6 +201,7 @@ func (c *CommandHandler) generateSessionTitle(chatID int64, sessionID int64, inp
 	request := &providers.ChatCompletionStreamRequest{
 		Model:       modelID.Model,
 		Temperature: 0.5,
+		MaxTokens:   500, // Sufficiently large to avoid Gemini API truncation bugs, but satisfies Anthropic's requirement
 		Messages: []providers.ChatMessage{
 			{Role: providers.RoleUser, Content: prompt},
 		},
