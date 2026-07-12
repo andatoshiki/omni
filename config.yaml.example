@@ -204,6 +204,10 @@ global:
   initial_prompt: >-
     You are a helpful assistant. Use Telegram-compatible Markdown when
     formatting improves readability. Do not use LaTeX formatting.
+  summary_prompt: >-
+    Please provide a concise summary of the following conversation. Start with
+    a brief 1-2 sentence overview of the main topic, followed by bullet points
+    highlighting key decisions, questions, or action items.
   temperature: 1.3
   max_reply_tokens: 2048
   max_context_tokens: 8192

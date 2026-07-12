@@ -46,6 +46,7 @@ func NewCommandHandler(app *App) *CommandHandler {
 	c.routes["setprompt"] = Route{Handler: command.SetPrompt, Description: "Set a custom system prompt"}
 	c.routes["clearprompt"] = Route{Handler: command.ClearPrompt, Description: "Clear the custom prompt"}
 	c.routes["export"] = Route{Handler: command.Export, Description: "Export conversation data"}
+	c.routes["summary"] = Route{Handler: command.Summary, Description: "Summarize the last X messages"}
 	c.routes["help"] = Route{Handler: command.Help, Description: "Show help message"}
 	c.routes["start"] = Route{Handler: command.Start, Hidden: true}
 

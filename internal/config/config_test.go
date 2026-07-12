@@ -20,6 +20,7 @@ providers:
         output_price: 1.10
 global:
   initial_prompt: Be concise.
+  summary_prompt: Summarize with decisions first.
 telegram:
   bot_token: 123:test
   allowed_user_ids: [10, 10]
@@ -38,6 +39,9 @@ telegram:
 	}
 	if got.Temperature != 1.3 || got.MaxReplyTokens != 2048 || got.MaxContextTokens != 8192 || got.HistorySize != 4 {
 		t.Fatalf("defaults not applied: %+v", got)
+	}
+	if got.SummaryPrompt != "Summarize with decisions first." {
+		t.Fatalf("SummaryPrompt = %q, want custom prompt", got.SummaryPrompt)
 	}
 	if !slices.Equal(got.AllowedUserIDs, []int64{10, 20}) {
 		t.Fatalf("AllowedUserIDs = %v, want [10 20]", got.AllowedUserIDs)
@@ -140,6 +144,31 @@ telegram:
 	}
 	if !got.Providers[0].IsEnabled() {
 		t.Fatal("provider without 'enabled' field should default to true")
+	}
+	if got.SummaryPrompt != DefaultSummaryPrompt {
+		t.Fatalf("SummaryPrompt = %q, want default", got.SummaryPrompt)
+	}
+}
+
+func TestParamsLoadBlankSummaryPromptUsesDefault(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: deepseek
+    api_key: sk-test
+    models:
+      - name: deepseek-chat
+global:
+  summary_prompt: "  "
+telegram:
+  bot_token: 123:test
+`)
+
+	var got Params
+	if err := got.Load(filename); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.SummaryPrompt != DefaultSummaryPrompt {
+		t.Fatalf("SummaryPrompt = %q, want default", got.SummaryPrompt)
 	}
 }
 

@@ -22,6 +22,7 @@ A versatile, Go-based Telegram bot supporting multiple AI platforms; with persis
 /setprompt - Assign a custom personality or system prompt to the bot
 /clearprompt - Revert to the default system prompt
 /export - Download your entire chat history as a JSON file
+/summary - Summarize the last X messages in the conversation
 /version - View build metadata and active Go environment
 /help - Show this comprehensive help message`
 
