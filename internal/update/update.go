@@ -335,7 +335,10 @@ func PrintHelp() {
 		return fmt.Sprintf("\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\", url, text)
 	}
 
-	fmt.Printf(`omni — a versatile Telegram bot with multi-provider AI support.
+	fmt.Printf(`Omni — a self-hosted Telegram AI assistant with persistent memory,
+model switching, and token tracking across chat sessions.
+
+Tech: Go · Telegram Bot API · multi-provider AI · SQLite / MySQL / PostgreSQL
 
 Usage:
   omni                  start the bot
@@ -343,20 +346,12 @@ Usage:
   omni --help           show this overview
   omni --version        show version and build info
 
-Tech: Go · Telegram Bot API · Anthropic · OpenAI · Gemini · Bedrock · Cohere
-      DeepSeek · Mistral · Ollama · Groq · xAI · Perplexity · HuggingFace
-      SQLite / MySQL / PostgreSQL
-
-Built with ❤️ by %s
-%s
-
-License: %s
-Source: %s
+Built with ❤️ by %s at %s,
+released under %s license.
 `,
 		l("https://www.toshiki.dev", "Anda Toshiki"),
 		l("https://t.me/toshikidev", "Toshiki's Devpedia"),
 		l("https://github.com/andatoshiki/omni/blob/master/license", "GPLv3"),
-		l("https://github.com/andatoshiki/omni", "github.com/andatoshiki/omni"),
 	)
 }
 
