@@ -331,7 +331,11 @@ func copyFile(src, dst string) error {
 
 // PrintHelp prints usage information for the update command.
 func PrintHelp() {
-	fmt.Print(`omni — a versatile Telegram bot with multi-provider AI support.
+	l := func(url, text string) string {
+		return fmt.Sprintf("\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\", url, text)
+	}
+
+	fmt.Printf(`omni — a versatile Telegram bot with multi-provider AI support.
 
 Usage:
   omni                  start the bot
@@ -343,10 +347,16 @@ Tech: Go · Telegram Bot API · Anthropic · OpenAI · Gemini · Bedrock · Cohe
       DeepSeek · Mistral · Ollama · Groq · xAI · Perplexity · HuggingFace
       SQLite / MySQL / PostgreSQL
 
-Built with ❤️ by Anda Toshiki — https://www.toshiki.dev
-Toshiki's Devpedia — https://t.me/toshikidev
+Built with ❤️ by %s
+%s
 
-License: GPLv3 — https://github.com/andatoshiki/omni/blob/master/license
-`)
+License: %s
+Source: %s
+`,
+		l("https://www.toshiki.dev", "Anda Toshiki"),
+		l("https://t.me/toshikidev", "Toshiki's Devpedia"),
+		l("https://github.com/andatoshiki/omni/blob/master/license", "GPLv3"),
+		l("https://github.com/andatoshiki/omni", "github.com/andatoshiki/omni"),
+	)
 }
 
