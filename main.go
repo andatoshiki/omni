@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,9 +13,33 @@ import (
 	"github.com/andatoshiki/omni/internal/logging"
 	"github.com/andatoshiki/omni/internal/providers"
 	"github.com/andatoshiki/omni/internal/storage"
+	"github.com/andatoshiki/omni/internal/update"
+	"github.com/andatoshiki/omni/internal/version"
 )
 
 func main() {
+	// Top-level flags — work standalone or alongside any subcommand.
+	for _, a := range os.Args[1:] {
+		switch a {
+		case "--help", "-h":
+			update.PrintHelp()
+			os.Exit(0)
+		case "--version", "-v":
+			fmt.Printf("omni %s\ncommit: %s\nbuilt:  %s\ngo:    %s\n",
+				version.Version, version.Commit, version.BuildTime, version.GoVersion())
+			os.Exit(0)
+		}
+	}
+
+	// Subcommand dispatch.
+	if len(os.Args) > 1 && os.Args[1] == "update" {
+		if err := update.Run(context.Background(), nil); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	logger := logging.ConfigureDefault()
 	logger.Info("bot starting")
 
