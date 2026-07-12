@@ -299,8 +299,8 @@ func replaceBinary(newPath, currentPath string) error {
 	if err := os.Rename(newPath, currentPath); err != nil {
 		// If the final rename fails (e.g. cross-filesystem), copy instead.
 		if err := copyFile(newPath, currentPath); err != nil {
-			// Try to restore backup.
-			os.Rename(backupPath, currentPath)
+			// Try to restore backup; ignore error since we're already in a failure path.
+			_ = os.Rename(backupPath, currentPath)
 			return fmt.Errorf("replace binary: %w", err)
 		}
 	}

@@ -305,7 +305,7 @@ func TestFetchLatestReleaseJSONParsing(t *testing.T) {
 				{Name: "checksums.txt", URL: srv.URL + "/download/checksums.txt", Size: 256},
 			},
 		}
-		json.NewEncoder(w).Encode(rel)
+		_ = json.NewEncoder(w).Encode(rel)
 	}))
 	defer srv.Close()
 
@@ -335,7 +335,7 @@ func TestDownloadAsset(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/download/asset.tar.gz" {
-			w.Write([]byte("fake binary data"))
+			_, _ = w.Write([]byte("fake binary data"))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -421,7 +421,7 @@ func TestRunEndToEnd(t *testing.T) {
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/repos/andatoshiki/omni/releases/latest":
-			json.NewEncoder(w).Encode(githubRelease{
+			_ = json.NewEncoder(w).Encode(githubRelease{
 				TagName: "v99.0.0",
 				Assets: []githubAsset{
 					{Name: expAsset, URL: fmt.Sprintf("%s/asset", srv.URL), Size: int64(len(archiveData))},
@@ -429,9 +429,9 @@ func TestRunEndToEnd(t *testing.T) {
 				},
 			})
 		case "/asset":
-			w.Write(archiveData)
+			_, _ = w.Write(archiveData)
 		case "/checksums":
-			w.Write([]byte(checksumsContent))
+			_, _ = w.Write([]byte(checksumsContent))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -487,7 +487,7 @@ func TestDownloadTimeout(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(2 * time.Second)
-		w.Write([]byte("too late"))
+		_, _ = w.Write([]byte("too late"))
 	}))
 	defer srv.Close()
 
