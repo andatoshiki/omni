@@ -31,9 +31,9 @@ func TestAssetName(t *testing.T) {
 		{"darwin", "arm64", "v1.2.3", "omni-darwin-aarch64-v1.2.3.tar.gz"},
 		{"linux", "amd64", "v1.2.3", "omni-linux-x86-64-v1.2.3.tar.gz"},
 		{"linux", "arm64", "v1.2.3", "omni-linux-aarch64-v1.2.3.tar.gz"},
-		{"windows", "amd64", "v1.2.3", "omni-windows-x86-64-v1.2.3.zip"},
-		{"windows", "arm64", "v1.2.3", "omni-windows-aarch64-v1.2.3.zip"},
-		// unsupported
+		// unsupported — no Windows (ZIP extraction not implemented)
+		{"windows", "amd64", "v1.2.3", ""},
+		{"windows", "arm64", "v1.2.3", ""},
 		{"freebsd", "amd64", "v1.2.3", ""},
 		{"linux", "riscv64", "v1.2.3", ""},
 	}
@@ -409,11 +409,13 @@ func TestRunEndToEnd(t *testing.T) {
 	archiveData := archiveBuf.Bytes()
 
 	// Compute checksums.
-	archiveHash := sha256.Sum256(archiveData)
-	checksumsContent := fmt.Sprintf("%s  omni-darwin-aarch64-v99.0.0.tar.gz\n",
-		hex.EncodeToString(archiveHash[:]))
-
 	expAsset := assetName(runtime.GOOS, runtime.GOARCH, "v99.0.0")
+	if expAsset == "" {
+		t.Skip("unsupported platform for end-to-end test")
+	}
+	archiveHash := sha256.Sum256(archiveData)
+	checksumsContent := fmt.Sprintf("%s  %s\n",
+		hex.EncodeToString(archiveHash[:]), expAsset)
 
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

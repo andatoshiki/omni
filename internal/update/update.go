@@ -130,9 +130,8 @@ func Run(ctx context.Context, client *http.Client) error {
 
 func assetName(goos, goarch, tag string) string {
 	osName, ok := map[string]string{
-		"darwin":  "darwin",
-		"linux":   "linux",
-		"windows": "windows",
+		"darwin": "darwin",
+		"linux":  "linux",
 	}[goos]
 	if !ok {
 		return ""
@@ -144,11 +143,7 @@ func assetName(goos, goarch, tag string) string {
 	if !ok {
 		return ""
 	}
-	ext := ".tar.gz"
-	if goos == "windows" {
-		ext = ".zip"
-	}
-	return fmt.Sprintf("omni-%s-%s-%s%s", osName, archName, tag, ext)
+	return fmt.Sprintf("omni-%s-%s-%s.tar.gz", osName, archName, tag)
 }
 
 // --- version comparison ---
