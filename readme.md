@@ -229,6 +229,7 @@ Pricing values are informational. Omni uses them for `/usage` estimates and does
 | Field | Default | Validation and behavior |
 | --- | --- | --- |
 | `initial_prompt` | Empty | System message prepended to every model request |
+| `summary_prompt` | Concise overview and bullet prompt | Instruction used by `/summary`; blank values use the built-in default |
 | `temperature` | `1.3` | Must be between `0` and `2` |
 | `max_reply_tokens` | `2048` | Must be greater than `0` |
 | `max_context_tokens` | `8192` | Must be greater than `max_reply_tokens` |
@@ -354,12 +355,15 @@ Omni extracts text from document attachments natively and adds it to the prompt 
 | `/setprompt` | Set a custom system prompt for the current chat |
 | `/clearprompt` | Restore the configured default system prompt |
 | `/export` | Export all stored conversations; restricted to explicitly allowed users and administrators |
+| `/summary [count]` | Summarize the newest stored messages; defaults to `20` and caps values above `100` |
 | `/help` | Display the command summary |
 | `/start` | Display the welcome message in a private chat |
 
 The router also recognizes `!` as a command prefix. Telegram privacy mode may not deliver `!` commands from groups, so `/` is the reliable prefix there.
 
 `/export` exports all stored chats, not only the current chat. The sender must be listed under `telegram.allowed_user_ids` or `telegram.admin_user_ids`, including when invoking the command from an allowed group.
+
+`/summary` excludes the conversation system prompt and Telegram speaker identity metadata. It can only summarize entries retained by `global.history_size`; when fewer than the requested count are stored, it summarizes all available entries.
 
 ### 5.6: Streaming and long replies
 
