@@ -25,6 +25,7 @@ type Params struct {
 	Database DatabaseConfig
 
 	InitialPrompt        string
+	SummaryPrompt        string
 	Temperature          float64
 	MaxReplyTokens       int
 	MaxContextTokens     int
@@ -87,6 +88,7 @@ func (p *Params) Load(filename string) error {
 			},
 		},
 		Global: globalConfig{
+			SummaryPrompt:        DefaultSummaryPrompt,
 			Temperature:          1.3,
 			MaxReplyTokens:       2048,
 			MaxContextTokens:     8192,
@@ -107,6 +109,9 @@ func (p *Params) Load(filename string) error {
 	}
 	if cfg.Database.Backend == "" {
 		cfg.Database.Backend = "sqlite"
+	}
+	if strings.TrimSpace(cfg.Global.SummaryPrompt) == "" {
+		cfg.Global.SummaryPrompt = DefaultSummaryPrompt
 	}
 
 	var databaseConfigOut DatabaseConfig
@@ -132,6 +137,7 @@ func (p *Params) Load(filename string) error {
 		BotToken:             strings.TrimSpace(cfg.Telegram.BotToken),
 		Database:             databaseConfigOut,
 		InitialPrompt:        cfg.Global.InitialPrompt,
+		SummaryPrompt:        cfg.Global.SummaryPrompt,
 		Temperature:          cfg.Global.Temperature,
 		MaxReplyTokens:       cfg.Global.MaxReplyTokens,
 		MaxContextTokens:     cfg.Global.MaxContextTokens,

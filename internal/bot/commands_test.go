@@ -60,3 +60,14 @@ func TestCommandRoutesHaveNoDeepSeekAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestSummaryCommandIsRegistered(t *testing.T) {
+	handler := NewCommandHandler(nil)
+	route, ok := handler.routes["summary"]
+	if !ok {
+		t.Fatal("summary command is not registered")
+	}
+	if route.Description != "Summarize the last X messages" {
+		t.Fatalf("summary description = %q", route.Description)
+	}
+}
