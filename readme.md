@@ -1,4 +1,4 @@
-# Omni
+# 🦉 Omni
 
 > A self-hosted Telegram AI assistant with multiple providers, persistent chat memory, streaming replies, image prompts, usage accounting, and native group mentions.
 
