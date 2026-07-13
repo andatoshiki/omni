@@ -36,18 +36,6 @@ func (a *App) sendMessageInThread(ctx context.Context, chatID int64, threadID in
 	return msg, nil
 }
 
-func (a *App) sendLongMessage(ctx context.Context, chatID int64, text string) {
-	for _, chunk := range splitText(text, streamPreviewLimit) {
-		_, _ = a.sendMessage(ctx, chatID, chunk)
-	}
-}
-
-func (a *App) sendLongReply(ctx context.Context, replyTo *models.Message, text string) {
-	for _, chunk := range splitText(text, streamPreviewLimit) {
-		_, _ = a.sendReplyToMessage(ctx, replyTo, chunk)
-	}
-}
-
 func splitText(text string, maxLen int) []string {
 	if maxLen <= 0 || len(text) <= maxLen {
 		return []string{text}

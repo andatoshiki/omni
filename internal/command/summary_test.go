@@ -1,11 +1,15 @@
 package command
 
 import (
+	"context"
 	"strings"
 	"testing"
 
-	"github.com/andatoshiki/omni/internal/conversation"
+	"github.com/go-telegram/bot/models"
+
+	"github.com/andatoshiki/omni/internal/config"
 	"github.com/andatoshiki/omni/internal/providers"
+	"github.com/andatoshiki/omni/internal/storage"
 )
 
 func TestParseSummaryMessageCount(t *testing.T) {
@@ -36,32 +40,65 @@ func TestParseSummaryMessageCount(t *testing.T) {
 	}
 }
 
-func TestSelectSummaryMessagesExcludesSystemAndKeepsNewest(t *testing.T) {
-	messages := []conversation.Message{
-		{Role: providers.RoleSystem, Content: "identity"},
-		{Role: providers.RoleUser, Content: "first"},
-		{Role: providers.RoleAssistant, Content: "second"},
-		{Role: providers.RoleUser, Content: "third"},
+func TestBuildSummaryPromptIncludesTranscriptSpeakerAndOrder(t *testing.T) {
+	messages := []storage.TranscriptMessage{
+		{Role: providers.RoleUser, Sender: "Alice\nSmith", Text: "first"},
+		{Role: providers.RoleAssistant, Text: "second"},
 	}
 
-	got := selectSummaryMessages(messages, 2)
-	if len(got) != 2 || got[0].Content != "second" || got[1].Content != "third" {
-		t.Fatalf("selectSummaryMessages() = %#v, want the newest two non-system messages", got)
+	got := buildSummaryPrompt("Summarize this.", messages)
+	if !strings.Contains(got, "User (Alice Smith): first\nAssistant: second") {
+		t.Fatalf("buildSummaryPrompt() = %q, want chronological speaker labels", got)
+	}
+	if !strings.HasPrefix(got, "Summarize this.\n\nConversation:\n") {
+		t.Fatalf("buildSummaryPrompt() = %q, want instruction before transcript", got)
 	}
 }
 
-func TestBuildSummaryPromptExcludesSpeakerIdentity(t *testing.T) {
-	messages := []conversation.Message{{
-		Role:    providers.RoleUser,
-		Content: "hello",
-		Speaker: &conversation.Speaker{DisplayName: "Secret Name"},
-	}}
+func TestSummaryQueriesTranscriptWithoutActiveSession(t *testing.T) {
+	store := &summaryTranscriptStore{}
+	bot := &summaryBotContext{
+		testBotContext: testBotContext{
+			store:  store,
+			params: &config.Params{Temperature: 1, MaxReplyTokens: 128},
+		},
+	}
 
-	got := buildSummaryPrompt("Summarize this.", messages)
-	if !strings.Contains(got, "User: hello") {
-		t.Fatalf("buildSummaryPrompt() = %q, want role and content", got)
+	Summary(context.Background(), bot, &models.Message{
+		ID: 100, MessageThreadID: 7, Chat: models.Chat{ID: 42},
+	})
+
+	if store.gotChatID != 42 || store.gotThreadID != 7 || store.gotBeforeID != 100 || store.gotLimit != 20 {
+		t.Fatalf("transcript query = chat %d thread %d before %d limit %d", store.gotChatID, store.gotThreadID, store.gotBeforeID, store.gotLimit)
 	}
-	if strings.Contains(got, "Secret Name") {
-		t.Fatalf("buildSummaryPrompt() = %q, should exclude speaker identity", got)
+	if len(bot.replies) != 1 || bot.replies[0] != "No recent text messages to summarize." {
+		t.Fatalf("replies = %#v, want empty transcript reply", bot.replies)
 	}
+}
+
+type summaryTranscriptStore struct {
+	storage.Store
+	messages    []storage.TranscriptMessage
+	gotChatID   int64
+	gotThreadID int
+	gotBeforeID int
+	gotLimit    int
+}
+
+func (s *summaryTranscriptStore) RecentTranscriptMessages(chatID int64, threadID, beforeMessageID, limit int) ([]storage.TranscriptMessage, error) {
+	s.gotChatID = chatID
+	s.gotThreadID = threadID
+	s.gotBeforeID = beforeMessageID
+	s.gotLimit = limit
+	return s.messages, nil
+}
+
+type summaryBotContext struct {
+	testBotContext
+	replies []string
+}
+
+func (b *summaryBotContext) Reply(_ context.Context, _ *models.Message, text string) (*models.Message, error) {
+	b.replies = append(b.replies, text)
+	return nil, nil
 }

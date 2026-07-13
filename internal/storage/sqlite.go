@@ -27,6 +27,20 @@ const sqliteSchema = `
 
 	CREATE INDEX IF NOT EXISTS idx_sessions_chat_id ON sessions(chat_id);
 
+	CREATE TABLE IF NOT EXISTS summary_transcript (
+		chat_id INTEGER NOT NULL,
+		thread_id INTEGER NOT NULL DEFAULT 0,
+		message_id INTEGER NOT NULL,
+		role TEXT NOT NULL,
+		sender_name TEXT NOT NULL DEFAULT '',
+		message_text TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (chat_id, message_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_summary_transcript_scope
+	ON summary_transcript(chat_id, thread_id, message_id DESC);
+
 	CREATE TABLE IF NOT EXISTS active_sessions (
 		chat_id INTEGER PRIMARY KEY,
 		session_id INTEGER NOT NULL

@@ -39,14 +39,14 @@ func NewCommandHandler(app *App) *CommandHandler {
 	c.routes["ping"] = Route{Handler: command.Ping, Description: "Check bot latency"}
 	c.routes["version"] = Route{Handler: command.Version, Description: "Show bot version"}
 	c.routes["model"] = Route{Handler: command.Model, Description: "Select AI model"}
-	c.routes["clear"] = Route{Handler: command.Clear, Description: "Clear conversation history"}
+	c.routes["clear"] = Route{Handler: command.Clear, Description: "Clear AI chat context"}
 	c.routes["new"] = Route{Handler: command.NewSession, Description: "Start a new conversation session"}
 	c.routes["usage"] = Route{Handler: command.Usage, Description: "Show token usage"}
 	c.routes["conversation"] = Route{Handler: command.Conversation, Description: "Manage conversation sessions"}
 	c.routes["setprompt"] = Route{Handler: command.SetPrompt, Description: "Set a custom system prompt"}
 	c.routes["clearprompt"] = Route{Handler: command.ClearPrompt, Description: "Clear the custom prompt"}
 	c.routes["export"] = Route{Handler: command.Export, Description: "Export conversation data"}
-	c.routes["summary"] = Route{Handler: command.Summary, Description: "Summarize the last X messages"}
+	c.routes["summary"] = Route{Handler: command.Summary, Description: "Summarize recent text messages"}
 	c.routes["help"] = Route{Handler: command.Help, Description: "Show help message"}
 	c.routes["start"] = Route{Handler: command.Start, Hidden: true}
 

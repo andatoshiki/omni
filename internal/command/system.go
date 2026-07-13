@@ -17,12 +17,12 @@ A versatile, Go-based Telegram bot supporting multiple AI platforms; with persis
 **Available Commands:**
 /model - Switch between AI models on the fly
 /ping - Check the bot's network latency
-/clear - Wipe your conversation history and start fresh
+/clear - Clear AI chat context and start fresh
 /usage - View your current token usage and estimated costs
 /setprompt - Assign a custom personality or system prompt to the bot
 /clearprompt - Revert to the default system prompt
 /export - Download your entire chat history as a JSON file
-/summary - Summarize the last X messages in the conversation
+/summary - Summarize the most recent text messages in this chat or topic
 /version - View build metadata and active Go environment
 /help - Show this comprehensive help message`
 

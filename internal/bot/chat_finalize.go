@@ -73,17 +73,29 @@ func (c *CommandHandler) sendFinalChatReply(ctx context.Context, msg, replyMsg *
 		finalReplyMsg, err := c.editReply(ctx, msg, replyMsg, text)
 		if err != nil {
 			_, _ = c.app.deleteMessage(ctx, finalReplyMsg)
-			_, _ = c.app.sendMessageInThread(ctx, msg.Chat.ID, msg.MessageThreadID, text)
+			finalReplyMsg, err = c.app.sendMessageInThread(ctx, msg.Chat.ID, msg.MessageThreadID, text)
+		}
+		if err == nil {
+			c.saveAssistantTranscriptMessage(msg, finalReplyMsg, text)
 		}
 		return
 	}
 
 	_, _ = c.app.deleteMessage(ctx, replyMsg)
-	if msg.Chat.ID >= 0 {
-		c.app.sendLongMessage(ctx, msg.Chat.ID, text)
-		return
+	for _, chunk := range splitText(text, streamPreviewLimit) {
+		var (
+			sent *models.Message
+			err  error
+		)
+		if msg.Chat.ID >= 0 {
+			sent, err = c.app.sendMessageInThread(ctx, msg.Chat.ID, msg.MessageThreadID, chunk)
+		} else {
+			sent, err = c.app.sendReplyToMessage(ctx, msg, chunk)
+		}
+		if err == nil {
+			c.saveAssistantTranscriptMessage(msg, sent, chunk)
+		}
 	}
-	c.app.sendLongReply(ctx, msg, text)
 }
 
 func appendTurnToHistory(history []conversation.Message, input ChatInput, userPrompt, text string, maxMessages int) []conversation.Message {

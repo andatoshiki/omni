@@ -12,6 +12,8 @@ import (
 type Store interface {
 	SaveSession(chatID int64, sessionID int64, messages []conversation.Message) error
 	LoadSession(chatID int64, sessionID int64) ([]conversation.Message, error)
+	SaveTranscriptMessage(message TranscriptMessage) error
+	RecentTranscriptMessages(chatID int64, threadID, beforeMessageID, limit int) ([]TranscriptMessage, error)
 	GetActiveSession(chatID int64) (SessionMeta, error)
 	SetActiveSession(chatID int64, sessionID int64) error
 	CreateNewSession(chatID int64, title string) (SessionMeta, error)
@@ -45,6 +47,17 @@ type SessionMeta struct {
 	Title          string
 	TitleGenerated bool
 	UpdatedAt      string
+}
+
+// TranscriptMessage is one text-only Telegram message available to /summary.
+// It is deliberately independent from the bounded AI conversation context.
+type TranscriptMessage struct {
+	ChatID    int64  `json:"chat_id"`
+	ThreadID  int    `json:"thread_id"`
+	MessageID int    `json:"message_id"`
+	Role      string `json:"role"`
+	Sender    string `json:"sender,omitempty"`
+	Text      string `json:"text"`
 }
 
 // Open initializes the appropriate database backend based on the provided configuration.
