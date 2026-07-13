@@ -6,7 +6,7 @@
 
 ### 1.1: What Omni does
 
-Omni connects a Telegram bot to Anthropic, Azure OpenAI, Cloudflare Workers AI, Cohere, DeepSeek, Google, Hugging Face, OpenAI, or another OpenAI-compatible chat completion API. It keeps each Telegram chat isolated in named sessions, remembers recent conversation history, streams model output back into Telegram, and stores operational state in SQLite, MySQL, or PostgreSQL.
+Omni connects a Telegram bot to Anthropic, Azure OpenAI, Cloudflare Workers AI, Cohere, DeepSeek, Google, Hugging Face, OpenAI, or another OpenAI-compatible chat completion API. It keeps each Telegram chat isolated in named sessions, remembers recent conversation history, streams model output back into Telegram, and stores operational state in SQLite, MySQL, PostgreSQL, or MongoDB.
 
 Private conversations work like a normal direct message. In an allowed group, users start a message with the bot's username, such as `@your_bot_username Explain this code`, or reply to one of the bot's messages. Omni removes its own username before sending the prompt to the selected model.
 
@@ -22,7 +22,7 @@ Private conversations work like a normal direct message. In an allowed group, us
 - **Unsupported-media protection:** Reject audio and video requests when the selected adapter cannot send that media instead of silently discarding attachments.
 - **Per-chat model selection:** Use a two-column inline Telegram keyboard to choose a provider and model for each chat.
 - **Streaming responses:** Receive a live preview while the model generates, followed by the complete response with dedicated error recovery and configurable HTTP timeouts per provider.
-- **Persistent memory:** Store bounded conversation history in SQLite, MySQL, or PostgreSQL and restore it after a restart.
+- **Persistent memory:** Store bounded conversation history in SQLite, MySQL, PostgreSQL, or MongoDB and restore it after a restart.
 - **Context management:** Estimate tokens, reserve reply space, and drop the oldest history when the request approaches a model's context limit.
 - **Usage tracking:** Record prompt, completion, and total token counts per user and chat.
 - **Cost estimates:** Calculate approximate input and output costs from configured per-million-token prices.
@@ -299,11 +299,11 @@ Before a request is sent, Omni reserves `max_reply_tokens` inside the active con
 
 ### 4.5: Database configuration
 
-Omni uses a discriminated union pattern for database configurations. The `database.backend` field chooses which storage backend to load: `"sqlite"`, `"mysql"`, or `"postgres"`.
+Omni uses a discriminated union pattern for database configurations. The `database.backend` field chooses which storage backend to load: `"sqlite"`, `"mysql"`, `"postgres"`, or `"mongodb"`.
 
 ```yaml
 database:
-  backend: "sqlite" # "sqlite", "mysql", or "postgres"
+  backend: "sqlite" # "sqlite", "mysql", "postgres", or "mongodb"
   
   sqlite:
     path: "omni.db" # Required if backend is sqlite
@@ -322,13 +322,20 @@ database:
     password: "supersecretpassword"
     db_name: "omni"    # Required if backend is postgres
     sslmode: "require" # Optional: "disable", "require", "verify-ca", "verify-full"
+
+  mongodb:
+    uri: "mongodb://omni_user:password@127.0.0.1:27017/?authSource=admin"
+    db_name: "omni"
 ```
 
 For SQLite (`database.sqlite.path`), a relative path is resolved from the directory containing the loaded YAML file. The parent directory must already exist and be writable by the bot process.
 
-MySQL and PostgreSQL connections are established at startup. Omni creates all required tables automatically for every supported backend. All three backends are covered by the same `storage.Store` interface, so switching backends does not affect bot behavior beyond the connection configuration.
+MySQL, PostgreSQL, and MongoDB connections are established at startup. Omni creates the required SQL tables or MongoDB collections and indexes automatically. All four backends implement the same `storage.Store` interface, so backend selection does not change bot behavior.
+
+For MongoDB, `database.mongodb.uri` accepts both `mongodb://` and `mongodb+srv://` connection strings, including replica-set, authentication, and TLS options. `database.mongodb.db_name` is the database in which Omni creates its collections and is required separately; omit the database path from the URI to keep that selection unambiguous. Treat the URI as a secret when it contains credentials.
 
 > **Breaking Change:** Previous versions used `database.path` at the root of the database object. It is now properly scoped under `database.sqlite.path` via the `backend` selector.
+
 ### 4.6: Telegram access configuration
 
 | Field | Meaning |
@@ -446,7 +453,7 @@ Omni organizes conversation history into named sessions. Each private chat or gr
 - Session titles are generated in the background by a dedicated lightweight model (`global.title_model`) when specified, or by the currently selected model as a fallback.
 - The number of sessions shown per page in the browser is controlled by `global.max_sessions_displayed`.
 
-Sessions are stored in the database alongside conversation history. The storage format is backend-agnostic: switching between SQLite, MySQL, or PostgreSQL preserves all sessions.
+Sessions are stored in the database alongside conversation history using the same logical model in SQLite, MySQL, PostgreSQL, and MongoDB. Changing an existing deployment to another backend requires migrating its stored data separately.
 
 `/summary` excludes the conversation system prompt and Telegram speaker identity metadata. It can only summarize entries retained by `global.history_size`; when fewer than the requested count are stored, it summarizes all available entries.
 
@@ -527,7 +534,7 @@ The repository ignores common local runtime artifacts, including:
 | `internal/command` | Independent command handlers for every Telegram command with shared bot context |
 | `internal/providers` | Enabled-provider registry, model resolution, and provider adapter boundary |
 | `internal/providers/platforms` | Native adapters for Anthropic, Cohere, and Google plus OpenAI-compatible adapters for Azure, Cloudflare, DeepSeek, Groq, Hugging Face, Mistral, Ollama, OpenAI, Perplexity, Together, and xAI |
-| `internal/storage` | Multi-backend database layer (SQLite, MySQL, PostgreSQL) with session management, conversation history, model preferences, exports, and usage records |
+| `internal/storage` | Multi-backend database layer (SQLite, MySQL, PostgreSQL, MongoDB) with session management, conversation history, model preferences, exports, and usage records |
 | `internal/telegramhtml` | Markdown rendering and sanitized Telegram HTML output |
 | `internal/update` | Self-update mechanism that fetches the latest GitHub release, verifies checksums, and atomically replaces the running binary |
 | `internal/version` | Build-time version, commit, and Go runtime information |
@@ -539,7 +546,7 @@ The repository ignores common local runtime artifacts, including:
 2. Configure the structured logger.
 3. Resolve and validate the YAML configuration.
 4. Build the registry from enabled providers.
-5. Open the database (SQLite, MySQL, or PostgreSQL) and run migrations.
+5. Open the configured database (SQLite, MySQL, PostgreSQL, or MongoDB) and initialize its schema or indexes.
 6. Initialize the Telegram client.
 7. Call Telegram `getMe` and store the bot username for mention matching.
 8. Register the command menu.
@@ -697,6 +704,7 @@ The image exposes no network ports. All communication is outbound to the Telegra
 
 - **SQLite:** Stop the bot or use a SQLite-aware backup method (`.backup` or `VACUUM INTO`) before copying an active database.
 - **MySQL / PostgreSQL:** Use the database server's native backup tooling (`mysqldump`, `pg_dump`) or your cloud provider's managed backup feature.
+- **MongoDB:** Use `mongodump`, filesystem or volume snapshots, or your managed provider's backup feature.
 - Protect backups because conversation history may contain sensitive content.
 - Back up `config.yaml` through a secret-management system, not source control.
 - Test database and configuration restoration before relying on a backup procedure.
@@ -735,16 +743,17 @@ Omni intentionally rejects obsolete or misspelled keys. Remove legacy `groups` a
 
 Increase the applicable `max_context_tokens`, reduce `max_reply_tokens`, shorten the current prompt, or select a model with a larger configured context window. Omni can discard old history, but it cannot shrink the system prompt and current request below the reserved budget.
 
-### 11.7: Database connection fails (MySQL / PostgreSQL)
+### 11.7: Database connection fails (MySQL / PostgreSQL / MongoDB)
 
-- Confirm the host, port, user, password, and `db_name` are correct.
+- For MySQL and PostgreSQL, confirm the host, port, user, password, and `db_name` are correct.
 - For PostgreSQL, set `sslmode` to `require` when connecting to a managed cloud instance; use `disable` for local development.
+- For MongoDB, confirm `database.mongodb.uri` and `database.mongodb.db_name` are correct. Percent-encode reserved characters in URI credentials.
 - Ensure the database server is reachable from the bot's network.
-- The database and user must already exist; Omni creates the tables automatically.
+- For SQL backends, the database and user must already exist; Omni creates the tables automatically. MongoDB creates its database and collections on first use when the configured account has permission.
 
 ### 11.8: Session-related issues
 
-- If sessions do not appear in `/conversation`, confirm the database backend is writable and the `sessions` table was created during startup.
+- If sessions do not appear in `/conversation`, confirm the database backend is writable and the `sessions` table or collection was created during startup.
 - If titles are blank, verify the `title_model` is a valid model name accessible to an enabled provider. Use `"provider_name / model_name"` syntax to disambiguate when multiple providers expose the same model name.
 - If sessions close too quickly, increase `global.session_timeout` (e.g. `"1h"` or `"4h"`).
 

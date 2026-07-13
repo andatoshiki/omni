@@ -107,6 +107,92 @@ telegram:
 	}
 }
 
+func TestParamsLoadMongoDB(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: deepseek
+    api_key: sk-test
+    models:
+      - name: deepseek-chat
+database:
+  backend: mongodb
+  mongodb:
+    uri: "  mongodb://localhost:27017  "
+    db_name: "  omni  "
+telegram:
+  bot_token: 123:test
+`)
+
+	var got Params
+	if err := got.Load(filename); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.Database.Backend != "mongodb" {
+		t.Fatalf("Database.Backend = %q, want mongodb", got.Database.Backend)
+	}
+	if got.Database.MongoDB.URI != "mongodb://localhost:27017" {
+		t.Fatalf("Database.MongoDB.URI = %q", got.Database.MongoDB.URI)
+	}
+	if got.Database.MongoDB.DBName != "omni" {
+		t.Fatalf("Database.MongoDB.DBName = %q", got.Database.MongoDB.DBName)
+	}
+}
+
+func TestParamsLoadRejectsIncompleteMongoDBConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		mongodbYAML string
+		wantError   string
+	}{
+		{name: "missing URI", mongodbYAML: "db_name: omni", wantError: "database.mongodb.uri"},
+		{name: "missing database name", mongodbYAML: "uri: mongodb://localhost:27017", wantError: "database.mongodb.db_name"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			filename := writeTestConfig(t, `
+providers:
+  - name: deepseek
+    api_key: sk-test
+    models:
+      - name: deepseek-chat
+database:
+  backend: mongodb
+  mongodb:
+    `+test.mongodbYAML+`
+telegram:
+  bot_token: 123:test
+`)
+
+			var got Params
+			err := got.Load(filename)
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("Load() error = %v, want %q", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestParamsLoadRejectsUnknownDatabaseBackend(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: deepseek
+    api_key: sk-test
+    models:
+      - name: deepseek-chat
+database:
+  backend: unknown
+telegram:
+  bot_token: 123:test
+`)
+
+	var got Params
+	err := got.Load(filename)
+	if err == nil || !strings.Contains(err.Error(), "database.backend") {
+		t.Fatalf("Load() error = %v, want backend error", err)
+	}
+}
+
 func TestParamsLoadRejectsContextLimitWithoutReplyRoom(t *testing.T) {
 	filename := writeTestConfig(t, `
 providers:
