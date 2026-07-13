@@ -11,5 +11,5 @@ func Clear(ctx context.Context, b BotContext, msg *models.Message) {
 		_, _ = b.Reply(ctx, msg, errorMessage(err))
 		return
 	}
-	_, _ = b.Reply(ctx, msg, "✅ Conversation history cleared")
+	_, _ = b.Reply(ctx, msg, "✅ AI chat context cleared")
 }

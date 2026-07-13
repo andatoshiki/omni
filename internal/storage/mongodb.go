@@ -23,13 +23,14 @@ import (
 const mongodbOperationTimeout = 10 * time.Second
 
 type mongoStore struct {
-	client         *mongo.Client
-	sessions       *mongo.Collection
-	activeSessions *mongo.Collection
-	userContext    *mongo.Collection
-	tokenUsage     *mongo.Collection
-	chatModels     *mongo.Collection
-	counters       *mongo.Collection
+	client            *mongo.Client
+	sessions          *mongo.Collection
+	summaryTranscript *mongo.Collection
+	activeSessions    *mongo.Collection
+	userContext       *mongo.Collection
+	tokenUsage        *mongo.Collection
+	chatModels        *mongo.Collection
+	counters          *mongo.Collection
 }
 
 type mongoSessionDocument struct {
@@ -40,6 +41,17 @@ type mongoSessionDocument struct {
 	Messages       []mongoMessageDocument `bson:"messages"`
 	CreatedAt      time.Time              `bson:"created_at"`
 	UpdatedAt      time.Time              `bson:"updated_at"`
+}
+
+type mongoTranscriptDocument struct {
+	ID        string    `bson:"_id"`
+	ChatID    int64     `bson:"chat_id"`
+	ThreadID  int       `bson:"thread_id"`
+	MessageID int       `bson:"message_id"`
+	Role      string    `bson:"role"`
+	Sender    string    `bson:"sender_name"`
+	Text      string    `bson:"message_text"`
+	CreatedAt time.Time `bson:"created_at"`
 }
 
 type mongoMessageDocument struct {
@@ -123,13 +135,14 @@ func newMongoDBStore(cfg config.MongoDBConfig) (Store, error) {
 
 	database := client.Database(cfg.DBName)
 	db := &mongoStore{
-		client:         client,
-		sessions:       database.Collection("sessions"),
-		activeSessions: database.Collection("active_sessions"),
-		userContext:    database.Collection("user_context"),
-		tokenUsage:     database.Collection("token_usage"),
-		chatModels:     database.Collection("chat_models"),
-		counters:       database.Collection("counters"),
+		client:            client,
+		sessions:          database.Collection("sessions"),
+		summaryTranscript: database.Collection("summary_transcript"),
+		activeSessions:    database.Collection("active_sessions"),
+		userContext:       database.Collection("user_context"),
+		tokenUsage:        database.Collection("token_usage"),
+		chatModels:        database.Collection("chat_models"),
+		counters:          database.Collection("counters"),
 	}
 	indexContext, cancelIndexes := mongodbContext()
 	err = db.createIndexes(indexContext)
@@ -158,6 +171,14 @@ func (db *mongoStore) createIndexes(ctx context.Context) error {
 		{
 			Keys:    bson.D{{Key: "chat_id", Value: 1}, {Key: "updated_at", Value: -1}},
 			Options: options.Index().SetName("idx_sessions_chat_updated"),
+		},
+	}); err != nil {
+		return err
+	}
+	if _, err := db.summaryTranscript.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "chat_id", Value: 1}, {Key: "thread_id", Value: 1}, {Key: "message_id", Value: -1}},
+			Options: options.Index().SetName("idx_summary_transcript_scope"),
 		},
 	}); err != nil {
 		return err

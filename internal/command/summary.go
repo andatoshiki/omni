@@ -2,7 +2,6 @@ package command
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -12,8 +11,8 @@ import (
 	"github.com/go-telegram/bot/models"
 
 	"github.com/andatoshiki/omni/internal/config"
-	"github.com/andatoshiki/omni/internal/conversation"
 	"github.com/andatoshiki/omni/internal/providers"
+	"github.com/andatoshiki/omni/internal/storage"
 )
 
 const (
@@ -22,7 +21,7 @@ const (
 	summaryUsage               = "❌ Usage: /summary [1-100]"
 )
 
-// Summary summarizes the most recent messages in the active conversation.
+// Summary summarizes the most recent text messages in the Telegram transcript.
 func Summary(ctx context.Context, b BotContext, msg *models.Message) {
 	count, ok := parseSummaryMessageCount(msg.Text)
 	if !ok {
@@ -30,27 +29,15 @@ func Summary(ctx context.Context, b BotContext, msg *models.Message) {
 		return
 	}
 
-	activeSession, err := b.Store().GetActiveSession(msg.Chat.ID)
-	if errors.Is(err, sql.ErrNoRows) {
-		_, _ = b.Reply(ctx, msg, "No conversation messages to summarize.")
-		return
-	}
+	messages, err := b.Store().RecentTranscriptMessages(msg.Chat.ID, msg.MessageThreadID, msg.ID, count)
 	if err != nil {
-		b.Logger().Error("failed to resolve active session for summary", append(b.MessageLogAttrs(msg), "error", err)...)
+		b.Logger().Error("failed to load summary transcript", append(b.MessageLogAttrs(msg), "message_count", count, "error", err)...)
 		_, _ = b.Reply(ctx, msg, errorMessage(err))
 		return
 	}
 
-	messages, err := b.Store().LoadSession(msg.Chat.ID, activeSession.ID)
-	if err != nil {
-		b.Logger().Error("failed to load active session for summary", append(b.MessageLogAttrs(msg), "session_id", activeSession.ID, "error", err)...)
-		_, _ = b.Reply(ctx, msg, errorMessage(err))
-		return
-	}
-
-	selected := selectSummaryMessages(messages, count)
-	if len(selected) == 0 {
-		_, _ = b.Reply(ctx, msg, "No conversation messages to summarize.")
+	if len(messages) == 0 {
+		_, _ = b.Reply(ctx, msg, "No recent text messages to summarize.")
 		return
 	}
 
@@ -81,7 +68,7 @@ func Summary(ctx context.Context, b BotContext, msg *models.Message) {
 		MaxTokens:   maxTokens,
 		Messages: []providers.ChatMessage{{
 			Role:    providers.RoleUser,
-			Content: buildSummaryPrompt(summaryPrompt, selected),
+			Content: buildSummaryPrompt(summaryPrompt, messages),
 		}},
 	}
 
@@ -136,27 +123,17 @@ func parseSummaryMessageCount(argument string) (int, bool) {
 	return count, true
 }
 
-func selectSummaryMessages(messages []conversation.Message, count int) []conversation.Message {
-	selected := make([]conversation.Message, 0, min(len(messages), count))
-	for _, message := range messages {
-		if message.Role != providers.RoleSystem {
-			selected = append(selected, message)
-		}
-	}
-	if len(selected) > count {
-		selected = selected[len(selected)-count:]
-	}
-	return selected
-}
-
-func buildSummaryPrompt(instruction string, messages []conversation.Message) string {
+func buildSummaryPrompt(instruction string, messages []storage.TranscriptMessage) string {
 	var prompt strings.Builder
 	prompt.WriteString(strings.TrimSpace(instruction))
 	prompt.WriteString("\n\nConversation:\n")
 	for _, message := range messages {
-		role := summaryRoleLabel(message.Role)
-		content := strings.TrimSpace(fmt.Sprint(message.Content))
-		fmt.Fprintf(&prompt, "%s: %s\n", role, content)
+		label := summaryRoleLabel(message.Role)
+		if message.Role == providers.RoleUser && strings.TrimSpace(message.Sender) != "" {
+			sender := strings.Join(strings.Fields(message.Sender), " ")
+			label = fmt.Sprintf("User (%s)", sender)
+		}
+		fmt.Fprintf(&prompt, "%s: %s\n", label, strings.TrimSpace(message.Text))
 	}
 	return strings.TrimSpace(prompt.String())
 }

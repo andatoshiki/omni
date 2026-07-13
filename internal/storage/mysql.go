@@ -30,6 +30,17 @@ const mysqlSchema = `
 		session_id INTEGER NOT NULL
 	);
 
+	CREATE TABLE IF NOT EXISTS summary_transcript (
+		chat_id BIGINT NOT NULL,
+		thread_id INTEGER NOT NULL DEFAULT 0,
+		message_id INTEGER NOT NULL,
+		role VARCHAR(32) NOT NULL,
+		sender_name TEXT NOT NULL,
+		message_text LONGTEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (chat_id, message_id)
+	);
+
 	CREATE TABLE IF NOT EXISTS user_context (
 		id INTEGER PRIMARY KEY AUTO_INCREMENT,
 		chat_id INTEGER UNIQUE,
@@ -167,6 +178,9 @@ func migrateMySQLLegacyConversations(tx *sql.Tx) error {
 
 func ensureMySQLIndexes(db *sql.DB) error {
 	if err := ensureMySQLIndex(db, "sessions", "idx_sessions_chat_id", "CREATE INDEX idx_sessions_chat_id ON sessions(chat_id)"); err != nil {
+		return err
+	}
+	if err := ensureMySQLIndex(db, "summary_transcript", "idx_summary_transcript_scope", "CREATE INDEX idx_summary_transcript_scope ON summary_transcript(chat_id, thread_id, message_id)"); err != nil {
 		return err
 	}
 	return ensureMySQLIndex(db, "token_usage", "idx_token_usage_chat_user", "CREATE INDEX idx_token_usage_chat_user ON token_usage(chat_id, user_id)")

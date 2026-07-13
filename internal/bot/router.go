@@ -14,7 +14,12 @@ import (
 
 func (a *App) handleMessage(ctx context.Context, update *models.Update) {
 	msg := update.Message
-	if msg == nil || (msg.Text == "" && len(msg.Photo) == 0 && msg.Voice == nil && msg.Audio == nil && msg.Video == nil && msg.VideoNote == nil && msg.Document == nil) {
+	if msg == nil {
+		return
+	}
+	messageText := telegramMessageText(msg)
+	routable := isRoutableTelegramMessage(msg)
+	if messageText == "" && !routable {
 		return
 	}
 	a.logger.Info("telegram message received", a.messageLogAttrs(msg)...)
@@ -25,6 +30,13 @@ func (a *App) handleMessage(ctx context.Context, update *models.Update) {
 		} else {
 			a.logger.Warn("telegram message ignored: group not allowed", a.messageLogAttrs(msg)...)
 		}
+		return
+	}
+	a.saveIncomingTranscriptMessage(msg)
+
+	// Text captions on unsupported media still belong to the summary transcript,
+	// but they do not change the existing live chat/media routing behavior.
+	if !routable {
 		return
 	}
 

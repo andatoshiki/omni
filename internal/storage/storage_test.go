@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -85,6 +86,69 @@ func TestConversationStringContentRoundTrips(t *testing.T) {
 		if !ok || content != want[index].Content {
 			t.Fatalf("message %d content = %#v (%T), want %q", index, got[index].Content, got[index].Content, want[index].Content)
 		}
+	}
+}
+
+func TestSummaryTranscriptKeepsRecentMessagesAcrossClear(t *testing.T) {
+	t.Parallel()
+
+	connection, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if _, err := connection.Exec(sqliteSchema); err != nil {
+		t.Fatal(err)
+	}
+	database := &sqliteStore{conn: connection}
+
+	for messageID := 1; messageID <= 105; messageID++ {
+		if err := database.SaveTranscriptMessage(TranscriptMessage{
+			ChatID: 42, ThreadID: 7, MessageID: messageID,
+			Role: providers.RoleUser, Sender: "Alice", Text: fmt.Sprintf("message %d", messageID),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := database.SaveTranscriptMessage(TranscriptMessage{
+		ChatID: 42, ThreadID: 8, MessageID: 200,
+		Role: providers.RoleUser, Text: "other topic",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SaveTranscriptMessage(TranscriptMessage{
+		ChatID: 42, ThreadID: 7, MessageID: 105,
+		Role: providers.RoleAssistant, Text: "updated final reply",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := database.ClearSessions(42); err != nil {
+		t.Fatal(err)
+	}
+	messages, err := database.RecentTranscriptMessages(42, 7, 106, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 5 {
+		t.Fatalf("message count = %d, want 5", len(messages))
+	}
+	for index, message := range messages {
+		wantID := 101 + index
+		if message.MessageID != wantID {
+			t.Fatalf("message %d ID = %d, want %d", index, message.MessageID, wantID)
+		}
+	}
+	if messages[4].Text != "updated final reply" || messages[4].Role != providers.RoleAssistant {
+		t.Fatalf("upserted message = %#v", messages[4])
+	}
+
+	retained, err := database.RecentTranscriptMessages(42, 7, 1000, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(retained) != 100 || retained[0].MessageID != 6 || retained[99].MessageID != 105 {
+		t.Fatalf("retained transcript range = %d..%d (%d messages), want 6..105 (100)", retained[0].MessageID, retained[len(retained)-1].MessageID, len(retained))
 	}
 }
 
