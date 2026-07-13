@@ -23,7 +23,7 @@ require (
 	github.com/xuri/excelize/v2 v2.10.1
 	github.com/yuin/goldmark v1.8.2
 	go.mongodb.org/mongo-driver/v2 v2.8.0
-	google.golang.org/genai v1.62.0
+	google.golang.org/genai v1.63.0
 	modernc.org/sqlite v1.53.0
 )
 
