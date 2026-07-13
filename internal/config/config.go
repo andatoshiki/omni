@@ -118,6 +118,10 @@ func (p *Params) Load(filename string) error {
 	databaseConfigOut.Backend = cfg.Database.Backend
 	databaseConfigOut.MySQL = cfg.Database.MySQL
 	databaseConfigOut.Postgres = cfg.Database.Postgres
+	databaseConfigOut.MongoDB = MongoDBConfig{
+		URI:    strings.TrimSpace(cfg.Database.MongoDB.URI),
+		DBName: strings.TrimSpace(cfg.Database.MongoDB.DBName),
+	}
 
 	if databaseConfigOut.Backend == "sqlite" {
 		databasePath, err := resolveDatabasePath(filename, cfg.Database.SQLite.Path)
@@ -268,8 +272,22 @@ func (p *Params) validate() error {
 	if p.BotToken == "" {
 		return fmt.Errorf("telegram.bot_token is required")
 	}
-	if p.Database.Backend == "sqlite" && p.Database.SQLite.Path == "" {
-		return fmt.Errorf("database.sqlite.path is required")
+	switch p.Database.Backend {
+	case "sqlite":
+		if p.Database.SQLite.Path == "" {
+			return fmt.Errorf("database.sqlite.path is required")
+		}
+	case "mysql", "postgres":
+		// The SQL backends validate connection details when opened.
+	case "mongodb":
+		if p.Database.MongoDB.URI == "" {
+			return fmt.Errorf("database.mongodb.uri is required")
+		}
+		if p.Database.MongoDB.DBName == "" {
+			return fmt.Errorf("database.mongodb.db_name is required")
+		}
+	default:
+		return fmt.Errorf("database.backend must be one of: sqlite, mysql, postgres, mongodb")
 	}
 	if p.Temperature < 0 || p.Temperature > 2 {
 		return fmt.Errorf("global.temperature must be between 0 and 2")

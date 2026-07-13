@@ -180,7 +180,7 @@ providers:
   #     - name: your-custom-model
 
 database:
-  backend: "sqlite" # "sqlite" or "mysql"
+  backend: "sqlite" # "sqlite", "mysql", "postgres", or "mongodb"
   
   sqlite:
     path: "omni.db"
@@ -199,6 +199,10 @@ database:
   #   password: "your_password"
   #   db_name: "postgres"
   #   sslmode: "require"
+
+  # mongodb:
+  #   uri: "mongodb://omni_user:password@127.0.0.1:27017/?authSource=admin"
+  #   db_name: "omni"
 
 global:
   initial_prompt: >-

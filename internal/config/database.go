@@ -5,6 +5,7 @@ type databaseConfig struct {
 	SQLite   SQLiteConfig   `yaml:"sqlite"`
 	MySQL    MySQLConfig    `yaml:"mysql"`
 	Postgres PostgresConfig `yaml:"postgres"`
+	MongoDB  MongoDBConfig  `yaml:"mongodb"`
 }
 
 type DatabaseConfig struct {
@@ -12,6 +13,7 @@ type DatabaseConfig struct {
 	SQLite   SQLiteConfig
 	MySQL    MySQLConfig
 	Postgres PostgresConfig
+	MongoDB  MongoDBConfig
 }
 
 type SQLiteConfig struct {
@@ -33,4 +35,9 @@ type PostgresConfig struct {
 	Password string `yaml:"password"`
 	DBName   string `yaml:"db_name"`
 	SSLMode  string `yaml:"sslmode"`
+}
+
+type MongoDBConfig struct {
+	URI    string `yaml:"uri"`
+	DBName string `yaml:"db_name"`
 }
