@@ -159,6 +159,74 @@ func TestUnsupportedMediaTypesReportsUnknownParts(t *testing.T) {
 	}
 }
 
+func TestReasoningRequestAndDelta(t *testing.T) {
+	var payload map[string]any
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		stream := "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"checking\"}}]}\n\n" +
+			"data: {\"choices\":[{\"delta\":{\"content\":\"answer\"}}]}\n\n" +
+			"data: [DONE]\n\n"
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(stream)),
+			Request:    request,
+		}, nil
+	})}
+
+	stream, err := (Adapter{HTTPClient: client, Dialect: ThinkingDialectOpenAI}).CreateChatCompletionStream(
+		context.Background(),
+		platforms.Endpoint{BaseURL: "https://api.example.test", APIKey: "test-key"},
+		&platforms.ChatCompletionStreamRequest{
+			Model:       "reasoning-model",
+			Temperature: 0.7,
+			MaxTokens:   500,
+			Thinking:    &platforms.ThinkingOptions{Mode: "enabled", Effort: "high"},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+
+	if payload["reasoning_effort"] != "high" || payload["max_completion_tokens"] != float64(500) {
+		t.Fatalf("reasoning payload = %#v", payload)
+	}
+	if _, exists := payload["temperature"]; exists {
+		t.Fatalf("temperature must be omitted for active reasoning: %#v", payload)
+	}
+	if _, exists := payload["max_tokens"]; exists {
+		t.Fatalf("max_tokens must be replaced for native OpenAI reasoning: %#v", payload)
+	}
+
+	reasoning, err := stream.Recv()
+	if err != nil || reasoning.Choices[0].Delta.ReasoningContent != "checking" {
+		t.Fatalf("reasoning delta = %#v, %v", reasoning, err)
+	}
+	answer, err := stream.Recv()
+	if err != nil || answer.Choices[0].Delta.Content != "answer" {
+		t.Fatalf("answer delta = %#v, %v", answer, err)
+	}
+}
+
+func TestDeepSeekThinkingTranslation(t *testing.T) {
+	request := &platforms.ChatCompletionStreamRequest{
+		Model:       "deepseek-reasoner",
+		Temperature: 0.8,
+		MaxTokens:   200,
+		Thinking:    &platforms.ThinkingOptions{Mode: "enabled", Effort: "medium"},
+	}
+	wire := (Adapter{Dialect: ThinkingDialectDeepSeek}).translateRequest(request)
+	if wire.Thinking == nil || wire.Thinking.Type != "enabled" {
+		t.Fatalf("thinking = %#v", wire.Thinking)
+	}
+	if wire.ReasoningEffort != "high" || wire.Temperature != nil || wire.MaxTokens != 200 {
+		t.Fatalf("translated request = %#v", wire)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {

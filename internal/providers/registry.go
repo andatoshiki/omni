@@ -121,7 +121,7 @@ func adapterForType(cfg config.ProviderConfig) (Adapter, error) {
 	case config.ProviderTypeDeepSeek:
 		return deepseekplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypeOpenAI:
-		return openaiplatform.Adapter{HTTPClient: client}, nil
+		return openaiplatform.Adapter{HTTPClient: client, Dialect: openaiplatform.ThinkingDialectOpenAI}, nil
 	case config.ProviderTypeCustom:
 		return customplatform.Adapter{OpenAI: openaiplatform.Adapter{HTTPClient: client}}, nil
 	case config.ProviderTypeGoogle:

@@ -36,6 +36,16 @@ func (a *App) sendMessageInThread(ctx context.Context, chatID int64, threadID in
 	return msg, nil
 }
 
+func (a *App) sendHTMLInThread(ctx context.Context, chatID int64, threadID int, text string) (*models.Message, error) {
+	msg, err := a.client.SendMessage(ctx, &telegram.SendMessageParams{
+		ChatID: chatID, MessageThreadID: threadID, Text: text, ParseMode: models.ParseModeHTML,
+	})
+	if err != nil {
+		a.logger.Error("telegram HTML message send failed", "chat_id", chatID, "error", err)
+	}
+	return msg, err
+}
+
 func splitText(text string, maxLen int) []string {
 	if maxLen <= 0 || len(text) <= maxLen {
 		return []string{text}
@@ -124,6 +134,23 @@ func (a *App) sendReplyToMessage(ctx context.Context, replyTo *models.Message, t
 	return msg, nil
 }
 
+func (a *App) sendHTMLReplyToMessage(ctx context.Context, replyTo *models.Message, text string) (*models.Message, error) {
+	if replyTo == nil {
+		return nil, errors.New("cannot reply to a nil message")
+	}
+	msg, err := a.client.SendMessage(ctx, &telegram.SendMessageParams{
+		ReplyParameters: &models.ReplyParameters{MessageID: replyTo.ID, AllowSendingWithoutReply: true},
+		ChatID:          replyTo.Chat.ID,
+		MessageThreadID: replyTo.MessageThreadID,
+		Text:            text,
+		ParseMode:       models.ParseModeHTML,
+	})
+	if err != nil {
+		a.logger.Error("telegram HTML reply send failed", append(a.messageLogAttrs(replyTo), "error", err)...)
+	}
+	return msg, err
+}
+
 func (a *App) sendReplyWithKeyboard(ctx context.Context, replyTo *models.Message, text string, keyboard *models.InlineKeyboardMarkup) (*models.Message, error) {
 	if replyTo == nil {
 		return nil, errors.New("cannot reply to a nil message")
@@ -167,6 +194,59 @@ func (a *App) editReplyToMessage(ctx context.Context, reply *models.Message, tex
 		return reply, err
 	}
 	return msg, nil
+}
+
+func (a *App) editMessageHTML(ctx context.Context, message *models.Message, text string) (*models.Message, error) {
+	if message == nil {
+		return nil, errors.New("cannot edit a nil message")
+	}
+	msg, err := a.client.EditMessageText(ctx, &telegram.EditMessageTextParams{
+		MessageID: message.ID,
+		ChatID:    message.Chat.ID,
+		Text:      text,
+		ParseMode: models.ParseModeHTML,
+	})
+	if err != nil {
+		a.logger.Error("telegram HTML message edit failed", append(a.messageLogAttrs(message), "error", err)...)
+		return message, err
+	}
+	return msg, nil
+}
+
+func (a *App) sendRichMessageDraft(ctx context.Context, msg *models.Message, draftID int, html string) error {
+	if msg == nil {
+		return errors.New("cannot draft a response to a nil message")
+	}
+	_, err := a.client.SendRichMessageDraft(ctx, &telegram.SendRichMessageDraftParams{
+		ChatID:          msg.Chat.ID,
+		MessageThreadID: msg.MessageThreadID,
+		DraftID:         draftID,
+		RichMessage:     models.InputRichMessage{HTML: html},
+		CanStop:         false,
+	})
+	if err != nil {
+		a.logger.Error("telegram rich message draft failed", append(a.messageLogAttrs(msg), "draft_id", draftID, "error", err)...)
+	}
+	return err
+}
+
+func (a *App) sendRichMessage(ctx context.Context, msg *models.Message, text string) (*models.Message, error) {
+	if msg == nil {
+		return nil, errors.New("cannot send a rich response to a nil message")
+	}
+	params := &telegram.SendRichMessageParams{
+		ChatID:          msg.Chat.ID,
+		MessageThreadID: msg.MessageThreadID,
+		RichMessage:     models.InputRichMessage{HTML: telegramhtml.RenderMarkdown(text)},
+	}
+	sent, err := a.client.SendRichMessage(ctx, params)
+	if err == nil {
+		return sent, nil
+	}
+	attrs := append(a.messageLogAttrs(msg), "error", err)
+	attrs = append(attrs, a.textMetricAttrs("text", text)...)
+	a.logger.Error("telegram rich message send failed", attrs...)
+	return nil, err
 }
 
 func (a *App) deleteMessage(ctx context.Context, msg *models.Message) (bool, error) {

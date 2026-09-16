@@ -153,14 +153,22 @@ func (c *CommandHandler) prepareChatContext(ctx context.Context, chatID int64, i
 	}
 
 	request := &providers.ChatCompletionStreamRequest{
-		Model:       modelID.Model,
-		Temperature: float32(c.app.params.Temperature),
-		MaxTokens:   maxReplyTokens,
-		Messages:    requestMessages,
+		Model:            modelID.Model,
+		Temperature:      float32(c.app.params.Temperature),
+		MaxTokens:        maxReplyTokens,
+		Messages:         requestMessages,
+		CaptureReasoning: true,
 	}
 
 	if modelConfig := c.app.providers.LookupModelConfig(modelID); modelConfig != nil && modelConfig.Temperature != nil {
 		request.Temperature = *modelConfig.Temperature
+	}
+	if modelConfig := c.app.providers.LookupModelConfig(modelID); modelConfig != nil && modelConfig.Thinking != nil {
+		request.Thinking = &providers.ThinkingOptions{
+			Mode:         modelConfig.Thinking.Mode,
+			Effort:       modelConfig.Thinking.Effort,
+			BudgetTokens: modelConfig.Thinking.BudgetTokens,
+		}
 	}
 
 	c.app.logger.Info(

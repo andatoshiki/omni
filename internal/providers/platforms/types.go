@@ -59,12 +59,20 @@ type StreamOptions struct {
 }
 
 type ChatCompletionStreamRequest struct {
-	Model         string        `json:"model"`
-	Messages      []ChatMessage `json:"messages"`
-	Temperature   float32       `json:"temperature"`
-	MaxTokens     int           `json:"max_tokens,omitempty"`
-	Stream        bool          `json:"stream"`
-	StreamOptions StreamOptions `json:"stream_options"`
+	Model            string           `json:"model"`
+	Messages         []ChatMessage    `json:"messages"`
+	Temperature      float32          `json:"temperature"`
+	MaxTokens        int              `json:"max_tokens,omitempty"`
+	Stream           bool             `json:"stream"`
+	StreamOptions    StreamOptions    `json:"stream_options"`
+	Thinking         *ThinkingOptions `json:"-"`
+	CaptureReasoning bool             `json:"-"`
+}
+
+type ThinkingOptions struct {
+	Mode         string
+	Effort       string
+	BudgetTokens *int
 }
 
 type TokenUsage struct {
@@ -74,7 +82,9 @@ type TokenUsage struct {
 }
 
 type StreamDelta struct {
-	Content string `json:"content"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	Reasoning        string `json:"reasoning,omitempty"`
 }
 
 type StreamChoice struct {

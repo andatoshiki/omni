@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/andatoshiki/omni/internal/providers/platforms"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
-	"github.com/andatoshiki/omni/internal/providers/platforms"
 )
 
 type Adapter struct {
@@ -102,10 +104,14 @@ func (a Adapter) CreateChatCompletionStream(
 	if len(system) > 0 {
 		input.System = system
 	}
+	if fields := thinkingRequestFields(request.Thinking); fields != nil {
+		input.AdditionalModelRequestFields = document.NewLazyDocument(fields)
+	}
 
 	inferenceConfig := &types.InferenceConfiguration{}
 	hasInferenceConfig := false
-	if request.Temperature > 0 {
+	thinkingActive := request.Thinking != nil && strings.ToLower(strings.TrimSpace(request.Thinking.Mode)) != "disabled"
+	if request.Temperature > 0 && !thinkingActive {
 		inferenceConfig.Temperature = aws.Float32(request.Temperature)
 		hasInferenceConfig = true
 	}
@@ -118,7 +124,7 @@ func (a Adapter) CreateChatCompletionStream(
 	}
 
 	streamCtx, cancel := context.WithCancel(ctx)
-	
+
 	output, err := a.Client.ConverseStream(streamCtx, input)
 	if err != nil {
 		cancel()
@@ -126,4 +132,31 @@ func (a Adapter) CreateChatCompletionStream(
 	}
 
 	return newBedrockStream(output.GetStream(), cancel), nil
+}
+
+func thinkingRequestFields(thinking *platforms.ThinkingOptions) map[string]any {
+	if thinking == nil {
+		return nil
+	}
+	mode := strings.ToLower(strings.TrimSpace(thinking.Mode))
+	if mode == "" {
+		mode = "auto"
+	}
+	fields := make(map[string]any)
+	switch mode {
+	case "auto":
+		fields["thinking"] = map[string]any{"type": "adaptive", "display": "summarized"}
+	case "enabled":
+		budget := 0
+		if thinking.BudgetTokens != nil {
+			budget = *thinking.BudgetTokens
+		}
+		fields["thinking"] = map[string]any{"type": "enabled", "budget_tokens": budget, "display": "summarized"}
+	case "disabled":
+		fields["thinking"] = map[string]any{"type": "disabled"}
+	}
+	if effort := strings.ToLower(strings.TrimSpace(thinking.Effort)); effort != "" && effort != "none" {
+		fields["output_config"] = map[string]any{"effort": effort}
+	}
+	return fields
 }

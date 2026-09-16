@@ -3,7 +3,7 @@ module github.com/andatoshiki/omni
 go 1.26.4
 
 require (
-	github.com/go-telegram/bot v1.21.0
+	github.com/go-telegram/bot v1.27.0
 	github.com/pkoukk/tiktoken-go v0.1.8
 	golang.org/x/net v0.56.0
 	gopkg.in/yaml.v3 v3.0.1

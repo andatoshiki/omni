@@ -91,6 +91,7 @@ func (a Adapter) CreateChatCompletionStream(
 	config := &genai.GenerateContentConfig{
 		Temperature: genai.Ptr(request.Temperature),
 	}
+	applyThinkingConfig(config, request)
 	if request.MaxTokens > 0 {
 		config.MaxOutputTokens = int32(request.MaxTokens)
 	}
@@ -110,6 +111,26 @@ func (a Adapter) CreateChatCompletionStream(
 	go bridge.run(streamCtx, stream)
 
 	return bridge, nil
+}
+
+func applyThinkingConfig(config *genai.GenerateContentConfig, request *platforms.ChatCompletionStreamRequest) {
+	if config == nil || request == nil || (!request.CaptureReasoning && request.Thinking == nil) {
+		return
+	}
+	config.ThinkingConfig = &genai.ThinkingConfig{IncludeThoughts: true}
+	if request.Thinking == nil {
+		return
+	}
+	mode := strings.ToLower(strings.TrimSpace(request.Thinking.Mode))
+	if mode == "disabled" {
+		config.ThinkingConfig.ThinkingBudget = genai.Ptr[int32](0)
+	}
+	if request.Thinking.BudgetTokens != nil {
+		config.ThinkingConfig.ThinkingBudget = genai.Ptr(int32(*request.Thinking.BudgetTokens))
+	}
+	if effort := strings.ToUpper(strings.TrimSpace(request.Thinking.Effort)); effort != "" && effort != "NONE" {
+		config.ThinkingConfig.ThinkingLevel = genai.ThinkingLevel(effort)
+	}
 }
 
 func decodeDataURI(uri string) ([]byte, string, error) {
@@ -151,23 +172,7 @@ func (s *geminiStream) run(ctx context.Context, iter func(func(*genai.GenerateCo
 			return false
 		}
 
-		chunk := &platforms.ChatCompletionStreamResponse{}
-
-		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-			if textPart := resp.Candidates[0].Content.Parts[0].Text; textPart != "" {
-				chunk.Choices = []platforms.StreamChoice{
-					{Delta: platforms.StreamDelta{Content: string(textPart)}},
-				}
-			}
-		}
-
-		if resp.UsageMetadata != nil {
-			chunk.Usage = &platforms.TokenUsage{
-				PromptTokens:     int64(resp.UsageMetadata.PromptTokenCount),
-				CompletionTokens: int64(resp.UsageMetadata.CandidatesTokenCount),
-				TotalTokens:      int64(resp.UsageMetadata.TotalTokenCount),
-			}
-		}
+		chunk := translateGeminiResponse(resp)
 
 		select {
 		case <-ctx.Done():
@@ -176,6 +181,33 @@ func (s *geminiStream) run(ctx context.Context, iter func(func(*genai.GenerateCo
 			return true
 		}
 	})
+}
+
+func translateGeminiResponse(resp *genai.GenerateContentResponse) *platforms.ChatCompletionStreamResponse {
+	chunk := &platforms.ChatCompletionStreamResponse{}
+	if resp == nil {
+		return chunk
+	}
+	if len(resp.Candidates) > 0 && resp.Candidates[0] != nil && resp.Candidates[0].Content != nil {
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if part == nil || part.Text == "" {
+				continue
+			}
+			delta := platforms.StreamDelta{Content: part.Text}
+			if part.Thought {
+				delta = platforms.StreamDelta{ReasoningContent: part.Text}
+			}
+			chunk.Choices = append(chunk.Choices, platforms.StreamChoice{Delta: delta})
+		}
+	}
+	if resp.UsageMetadata != nil {
+		chunk.Usage = &platforms.TokenUsage{
+			PromptTokens:     int64(resp.UsageMetadata.PromptTokenCount),
+			CompletionTokens: int64(resp.UsageMetadata.CandidatesTokenCount + resp.UsageMetadata.ThoughtsTokenCount),
+			TotalTokens:      int64(resp.UsageMetadata.TotalTokenCount),
+		}
+	}
+	return chunk
 }
 
 func (s *geminiStream) Recv() (*platforms.ChatCompletionStreamResponse, error) {

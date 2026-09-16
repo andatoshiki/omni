@@ -13,7 +13,9 @@ type ChatImageURL = platforms.ChatImageURL
 type MediaData = platforms.MediaData
 type ChatCompletionStreamRequest = platforms.ChatCompletionStreamRequest
 type ChatCompletionStream = platforms.ChatCompletionStream
+type ChatCompletionStreamResponse = platforms.ChatCompletionStreamResponse
 type TokenUsage = platforms.TokenUsage
+type ThinkingOptions = platforms.ThinkingOptions
 
 const ModelIDSeparator = " / "
 

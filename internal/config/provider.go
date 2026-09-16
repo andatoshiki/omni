@@ -6,32 +6,32 @@ import (
 )
 
 const (
-	ProviderTypeDeepSeek   = "deepseek"
-	ProviderTypeOpenAI     = "openai"
-	ProviderTypeCustom     = "custom"
-	ProviderTypeGoogle     = "google"
-	ProviderTypeAnthropic  = "anthropic"
-	ProviderTypeXAI        = "xai"
-	ProviderTypePerplexity = "perplexity"
-	ProviderTypeOllama     = "ollama"
-	ProviderTypeGroq       = "groq"
-	ProviderTypeTogether   = "together"
-	ProviderTypeMistral    = "mistral"
-	ProviderTypeBedrock    = "bedrock"
-	ProviderTypeAzure      = "azure"
-	ProviderTypeCloudflare = "cloudflare"
-	ProviderTypeCohere     = "cohere"
-	ProviderTypeHuggingFace= "huggingface"
+	ProviderTypeDeepSeek    = "deepseek"
+	ProviderTypeOpenAI      = "openai"
+	ProviderTypeCustom      = "custom"
+	ProviderTypeGoogle      = "google"
+	ProviderTypeAnthropic   = "anthropic"
+	ProviderTypeXAI         = "xai"
+	ProviderTypePerplexity  = "perplexity"
+	ProviderTypeOllama      = "ollama"
+	ProviderTypeGroq        = "groq"
+	ProviderTypeTogether    = "together"
+	ProviderTypeMistral     = "mistral"
+	ProviderTypeBedrock     = "bedrock"
+	ProviderTypeAzure       = "azure"
+	ProviderTypeCloudflare  = "cloudflare"
+	ProviderTypeCohere      = "cohere"
+	ProviderTypeHuggingFace = "huggingface"
 )
 
 type ProviderConfig struct {
-	Name         string         `yaml:"name"`
-	Type         string         `yaml:"type"`
-	Enabled      *bool          `yaml:"enabled"` // nil = true (default enabled)
-	APIKey       string         `yaml:"api_key"`
-	APIBase      string         `yaml:"api_base"`
-	AWSAccessKey string         `yaml:"aws_access_key"`
-	AWSSecretKey string         `yaml:"aws_secret_key"`
+	Name                string         `yaml:"name"`
+	Type                string         `yaml:"type"`
+	Enabled             *bool          `yaml:"enabled"` // nil = true (default enabled)
+	APIKey              string         `yaml:"api_key"`
+	APIBase             string         `yaml:"api_base"`
+	AWSAccessKey        string         `yaml:"aws_access_key"`
+	AWSSecretKey        string         `yaml:"aws_secret_key"`
 	AWSRegion           string         `yaml:"aws_region"`
 	APIVersion          string         `yaml:"api_version"`
 	CloudflareAccountID string         `yaml:"cloudflare_account_id"`
@@ -88,10 +88,19 @@ func (p ProviderConfig) EffectiveType() string {
 }
 
 type ModelConfig struct {
-	Name             string   `yaml:"name"`
-	InputPrice       float64  `yaml:"input_price"`  // USD per 1M input tokens
-	OutputPrice      float64  `yaml:"output_price"` // USD per 1M output tokens
-	Temperature      *float32 `yaml:"temperature,omitempty"`
-	MaxReplyTokens   int      `yaml:"max_reply_tokens"`   // 0 inherits global.max_reply_tokens
-	MaxContextTokens int      `yaml:"max_context_tokens"` // 0 inherits global.max_context_tokens
+	Name             string          `yaml:"name"`
+	InputPrice       float64         `yaml:"input_price"`  // USD per 1M input tokens
+	OutputPrice      float64         `yaml:"output_price"` // USD per 1M output tokens
+	Temperature      *float32        `yaml:"temperature,omitempty"`
+	MaxReplyTokens   int             `yaml:"max_reply_tokens"`   // 0 inherits global.max_reply_tokens
+	MaxContextTokens int             `yaml:"max_context_tokens"` // 0 inherits global.max_context_tokens
+	Thinking         *ThinkingConfig `yaml:"thinking,omitempty"`
+}
+
+// ThinkingConfig contains the portable subset of model reasoning controls.
+// Provider adapters translate these values to their native request shape.
+type ThinkingConfig struct {
+	Mode         string `yaml:"mode,omitempty"`          // auto, enabled, disabled
+	Effort       string `yaml:"effort,omitempty"`        // none, minimal, low, medium, high, xhigh, max
+	BudgetTokens *int   `yaml:"budget_tokens,omitempty"` // provider-specific; -1 means dynamic where supported
 }

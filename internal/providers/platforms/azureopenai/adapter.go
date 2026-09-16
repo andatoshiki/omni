@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/andatoshiki/omni/internal/providers/platforms"
+	"github.com/andatoshiki/omni/internal/providers/platforms/openai"
 )
 
 type Adapter struct {
@@ -28,7 +29,7 @@ func (a Adapter) CreateChatCompletionStream(ctx context.Context, endpoint platfo
 	// Format: https://{endpoint}/openai/deployments/{deployment-id}/chat/completions?api-version={api-version}
 	url := fmt.Sprintf("%s/openai/deployments/%s/chat/completions?api-version=%s", baseURL, req.Model, a.APIVersion)
 
-	payloadBytes, err := json.Marshal(req)
+	payloadBytes, err := openai.EncodeChatCompletionRequest(req, openai.ThinkingDialectOpenAI)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
@@ -43,7 +44,11 @@ func (a Adapter) CreateChatCompletionStream(ctx context.Context, endpoint platfo
 	httpReq.Header.Set("api-key", endpoint.APIKey)
 	httpReq.Header.Set("Accept", "text/event-stream")
 
-	resp, err := a.HTTPClient.Do(httpReq)
+	client := a.HTTPClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}

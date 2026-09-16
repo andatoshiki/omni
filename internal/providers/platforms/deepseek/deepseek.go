@@ -18,5 +18,7 @@ func (a Adapter) CreateChatCompletionStream(
 	endpoint platforms.Endpoint,
 	request *platforms.ChatCompletionStreamRequest,
 ) (platforms.ChatCompletionStream, error) {
-	return a.OpenAI.CreateChatCompletionStream(ctx, endpoint, request)
+	adapter := a.OpenAI
+	adapter.Dialect = openai.ThinkingDialectDeepSeek
+	return adapter.CreateChatCompletionStream(ctx, endpoint, request)
 }

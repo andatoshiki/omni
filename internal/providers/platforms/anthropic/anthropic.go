@@ -14,6 +14,7 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 
 	"github.com/andatoshiki/omni/internal/providers/platforms"
@@ -121,13 +122,43 @@ func buildMessageParams(request *platforms.ChatCompletionStreamRequest) (anthrop
 		return anthropicsdk.MessageNewParams{}, errors.New("at least one user or assistant message is required")
 	}
 
-	return anthropicsdk.MessageNewParams{
+	params := anthropicsdk.MessageNewParams{
 		MaxTokens:   int64(request.MaxTokens),
 		Messages:    messages,
 		Model:       anthropicsdk.Model(strings.TrimSpace(request.Model)),
 		System:      system,
 		Temperature: anthropicsdk.Float(float64(request.Temperature)),
-	}, nil
+	}
+	if request.Thinking != nil {
+		mode := strings.ToLower(strings.TrimSpace(request.Thinking.Mode))
+		if mode == "" {
+			mode = "auto"
+		}
+		switch mode {
+		case "auto":
+			params.Thinking = anthropicsdk.ThinkingConfigParamUnion{OfAdaptive: &anthropicsdk.ThinkingConfigAdaptiveParam{
+				Display: anthropicsdk.ThinkingConfigAdaptiveDisplaySummarized,
+			}}
+			params.Temperature = param.Opt[float64]{}
+		case "enabled":
+			budget := int64(0)
+			if request.Thinking.BudgetTokens != nil {
+				budget = int64(*request.Thinking.BudgetTokens)
+			}
+			params.Thinking = anthropicsdk.ThinkingConfigParamUnion{OfEnabled: &anthropicsdk.ThinkingConfigEnabledParam{
+				BudgetTokens: budget,
+				Display:      anthropicsdk.ThinkingConfigEnabledDisplaySummarized,
+			}}
+			params.Temperature = param.Opt[float64]{}
+		case "disabled":
+			disabled := anthropicsdk.NewThinkingConfigDisabledParam()
+			params.Thinking = anthropicsdk.ThinkingConfigParamUnion{OfDisabled: &disabled}
+		}
+		if effort := strings.ToLower(strings.TrimSpace(request.Thinking.Effort)); effort != "" && effort != "none" {
+			params.OutputConfig.Effort = anthropicsdk.OutputConfigEffort(effort)
+		}
+	}
+	return params, nil
 }
 
 func systemBlocks(content any) ([]anthropicsdk.TextBlockParam, []string, error) {
@@ -256,12 +287,21 @@ func (s *messageStream) Recv() (*platforms.ChatCompletionStreamResponse, error) 
 		case "message_start":
 			s.promptTokens = inputTokens(event.Message.Usage.InputTokens, event.Message.Usage.CacheCreationInputTokens, event.Message.Usage.CacheReadInputTokens)
 		case "content_block_delta":
-			if event.Delta.Type != "text_delta" || event.Delta.Text == "" {
-				continue
+			switch event.Delta.Type {
+			case "text_delta":
+				if event.Delta.Text != "" {
+					return &platforms.ChatCompletionStreamResponse{
+						Choices: []platforms.StreamChoice{{Delta: platforms.StreamDelta{Content: event.Delta.Text}}},
+					}, nil
+				}
+			case "thinking_delta":
+				if event.Delta.Thinking != "" {
+					return &platforms.ChatCompletionStreamResponse{
+						Choices: []platforms.StreamChoice{{Delta: platforms.StreamDelta{ReasoningContent: event.Delta.Thinking}}},
+					}, nil
+				}
 			}
-			return &platforms.ChatCompletionStreamResponse{
-				Choices: []platforms.StreamChoice{{Delta: platforms.StreamDelta{Content: event.Delta.Text}}},
-			}, nil
+			continue
 		case "message_delta":
 			promptTokens := inputTokens(event.Usage.InputTokens, event.Usage.CacheCreationInputTokens, event.Usage.CacheReadInputTokens)
 			if promptTokens == 0 {
