@@ -264,6 +264,9 @@ func (p *Params) validate() error {
 			if prov.EffectiveType() == ProviderTypeAnthropic && effectiveTemperature > 1 {
 				return fmt.Errorf("providers[%d].models[%d].temperature must be between 0 and 1 for Anthropic (provider: %s)", i, j, providerName)
 			}
+			if err := validateThinkingConfig(prov.EffectiveType(), model, effReplyTokens); err != nil {
+				return fmt.Errorf("providers[%d].models[%d].thinking: %w (provider: %s)", i, j, err, providerName)
+			}
 		}
 	}
 	if !hasEnabled {
@@ -306,6 +309,115 @@ func (p *Params) validate() error {
 		// Valid
 	default:
 		return fmt.Errorf("global.sender_context must be one of: off, groups, all")
+	}
+	return nil
+}
+
+func validateThinkingConfig(providerType string, model ModelConfig, maxReplyTokens int) error {
+	if model.Thinking == nil {
+		return nil
+	}
+	thinking := model.Thinking
+	mode := strings.ToLower(strings.TrimSpace(thinking.Mode))
+	effort := strings.ToLower(strings.TrimSpace(thinking.Effort))
+	if mode == "" {
+		mode = "auto"
+	}
+	switch mode {
+	case "auto", "enabled", "disabled":
+	default:
+		return fmt.Errorf("mode must be one of auto, enabled, disabled")
+	}
+	switch effort {
+	case "", "none", "minimal", "low", "medium", "high", "xhigh", "max":
+	default:
+		return fmt.Errorf("effort must be one of none, minimal, low, medium, high, xhigh, max")
+	}
+	if thinking.BudgetTokens != nil {
+		budget := *thinking.BudgetTokens
+		if budget < -1 {
+			return fmt.Errorf("budget_tokens must be -1, 0, or a positive value")
+		}
+		if budget > 0 && budget >= maxReplyTokens {
+			return fmt.Errorf("budget_tokens must be less than effective max_reply_tokens (%d)", maxReplyTokens)
+		}
+		if effort != "" && effort != "none" {
+			return fmt.Errorf("effort and budget_tokens cannot be used together")
+		}
+	}
+	if mode == "enabled" && effort == "none" {
+		return fmt.Errorf("enabled mode cannot use effort none")
+	}
+	if mode == "disabled" {
+		if effort != "" && effort != "none" {
+			return fmt.Errorf("disabled mode cannot set an active effort")
+		}
+		if thinking.BudgetTokens != nil && *thinking.BudgetTokens != 0 {
+			return fmt.Errorf("disabled mode only permits budget_tokens 0")
+		}
+	}
+
+	switch providerType {
+	case ProviderTypeDeepSeek:
+		if thinking.BudgetTokens != nil {
+			return fmt.Errorf("budget_tokens is not supported by DeepSeek")
+		}
+	case ProviderTypeOpenAI, ProviderTypeCustom, ProviderTypeXAI, ProviderTypePerplexity,
+		ProviderTypeOllama, ProviderTypeGroq, ProviderTypeTogether, ProviderTypeMistral,
+		ProviderTypeAzure, ProviderTypeHuggingFace:
+		if thinking.BudgetTokens != nil {
+			return fmt.Errorf("budget_tokens is not supported by OpenAI-compatible providers")
+		}
+		if mode == "enabled" && effort == "" {
+			return fmt.Errorf("enabled mode requires effort for OpenAI-compatible providers")
+		}
+	case ProviderTypeAnthropic:
+		if mode != "disabled" && (effort == "minimal" || effort == "none") {
+			return fmt.Errorf("Anthropic effort must be low, medium, high, xhigh, or max")
+		}
+		if mode == "enabled" {
+			if thinking.BudgetTokens == nil || *thinking.BudgetTokens < 1024 {
+				return fmt.Errorf("enabled mode requires budget_tokens of at least 1024 for Anthropic")
+			}
+		}
+		if mode != "enabled" && thinking.BudgetTokens != nil {
+			return fmt.Errorf("budget_tokens requires enabled mode for Anthropic")
+		}
+	case ProviderTypeGoogle:
+		modelName := strings.ToLower(strings.TrimSpace(model.Name))
+		if strings.HasPrefix(modelName, "gemini-2.5-") && effort != "" {
+			return fmt.Errorf("Gemini 2.5 models use budget_tokens instead of effort")
+		}
+		if strings.HasPrefix(modelName, "gemini-3") && thinking.BudgetTokens != nil {
+			return fmt.Errorf("Gemini 3 models use effort instead of budget_tokens")
+		}
+		if strings.HasPrefix(modelName, "gemini-3") && mode == "disabled" {
+			return fmt.Errorf("disabled mode is not supported for Gemini 3 models")
+		}
+		if mode != "disabled" && (effort == "xhigh" || effort == "max" || effort == "none") {
+			return fmt.Errorf("Gemini effort must be minimal, low, medium, or high")
+		}
+		if mode == "enabled" && effort == "" && thinking.BudgetTokens == nil {
+			return fmt.Errorf("enabled mode requires effort or budget_tokens for Gemini")
+		}
+		if mode == "enabled" && thinking.BudgetTokens != nil && *thinking.BudgetTokens <= 0 {
+			return fmt.Errorf("enabled mode requires a positive budget_tokens value for Gemini")
+		}
+	case ProviderTypeBedrock:
+		if !strings.Contains(strings.ToLower(model.Name), "claude") {
+			return fmt.Errorf("thinking controls are currently supported only for Claude models on Bedrock")
+		}
+		if mode != "disabled" && (effort == "minimal" || effort == "none") {
+			return fmt.Errorf("Bedrock Claude effort must be low, medium, high, xhigh, or max")
+		}
+		if mode == "enabled" && (thinking.BudgetTokens == nil || *thinking.BudgetTokens < 1024) {
+			return fmt.Errorf("enabled mode requires budget_tokens of at least 1024 for Bedrock Claude")
+		}
+		if mode != "enabled" && thinking.BudgetTokens != nil {
+			return fmt.Errorf("budget_tokens requires enabled mode for Bedrock Claude")
+		}
+	case ProviderTypeCloudflare, ProviderTypeCohere:
+		return fmt.Errorf("thinking controls are not supported by this provider")
 	}
 	return nil
 }

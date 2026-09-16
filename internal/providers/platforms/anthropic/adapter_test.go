@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
+
 	"github.com/andatoshiki/omni/internal/providers/platforms"
 )
 
@@ -77,9 +79,17 @@ func TestAdapterTranslatesAndStreamsAnthropicMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Recv() error = %v", err)
 	}
+	if len(second.Choices) != 1 || second.Choices[0].Delta.ReasoningContent != "hidden" {
+		t.Fatalf("second Recv() = %#v, want thinking delta", second)
+	}
+
+	third, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("third Recv() error = %v", err)
+	}
 	wantUsage := &platforms.TokenUsage{PromptTokens: 16, CompletionTokens: 7, TotalTokens: 23}
-	if second.Usage == nil || *second.Usage != *wantUsage {
-		t.Fatalf("second Recv() usage = %#v, want %#v", second.Usage, wantUsage)
+	if third.Usage == nil || *third.Usage != *wantUsage {
+		t.Fatalf("third Recv() usage = %#v, want %#v", third.Usage, wantUsage)
 	}
 	if _, err := stream.Recv(); !errors.Is(err, io.EOF) {
 		t.Fatalf("final Recv() error = %v, want EOF", err)
@@ -216,5 +226,28 @@ func TestBuildMessageParamsRejectsInvalidAnthropicInputs(t *testing.T) {
 				t.Fatalf("buildMessageParams() error = %v, want %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildMessageParamsIncludesThinkingControls(t *testing.T) {
+	budget := 2048
+	params, err := buildMessageParams(&platforms.ChatCompletionStreamRequest{
+		Model:       "claude-test",
+		Temperature: 0.7,
+		MaxTokens:   4096,
+		Thinking:    &platforms.ThinkingOptions{Mode: "enabled", BudgetTokens: &budget},
+		Messages:    []platforms.ChatMessage{{Role: platforms.RoleUser, Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("buildMessageParams() error = %v", err)
+	}
+	if params.Thinking.OfEnabled == nil || params.Thinking.OfEnabled.BudgetTokens != int64(budget) {
+		t.Fatalf("Thinking = %#v", params.Thinking)
+	}
+	if params.Thinking.OfEnabled.Display != "summarized" {
+		t.Fatalf("thinking display = %q", params.Thinking.OfEnabled.Display)
+	}
+	if !param.IsOmitted(params.Temperature) {
+		t.Fatalf("temperature must be omitted with active thinking: %#v", params.Temperature)
 	}
 }

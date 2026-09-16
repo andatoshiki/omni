@@ -4,9 +4,10 @@ import (
 	"context"
 	"io"
 
+	"github.com/andatoshiki/omni/internal/providers/platforms"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
-	"github.com/andatoshiki/omni/internal/providers/platforms"
 )
 
 type bedrockStream struct {
@@ -33,23 +34,36 @@ func (s *bedrockStream) Recv() (*platforms.ChatCompletionStreamResponse, error) 
 
 		switch v := msg.(type) {
 		case *types.ConverseStreamOutputMemberContentBlockDelta:
-			if textDelta, ok := v.Value.Delta.(*types.ContentBlockDeltaMemberText); ok {
+			switch delta := v.Value.Delta.(type) {
+			case *types.ContentBlockDeltaMemberText:
 				return &platforms.ChatCompletionStreamResponse{
 					Choices: []platforms.StreamChoice{
 						{
 							Delta: platforms.StreamDelta{
-								Content: textDelta.Value,
+								Content: delta.Value,
 							},
 						},
 					},
 				}, nil
+			case *types.ContentBlockDeltaMemberReasoningContent:
+				if reasoning, ok := delta.Value.(*types.ReasoningContentBlockDeltaMemberText); ok {
+					return &platforms.ChatCompletionStreamResponse{
+						Choices: []platforms.StreamChoice{{Delta: platforms.StreamDelta{ReasoningContent: reasoning.Value}}},
+					}, nil
+				}
 			}
 		case *types.ConverseStreamOutputMemberMessageStop:
 			// The stream has successfully finished generating content.
 			// The overall stream channel will close shortly.
 			continue
 		case *types.ConverseStreamOutputMemberMetadata:
-			// Optionally extract token usage from metadata in the future.
+			if v.Value.Usage != nil {
+				return &platforms.ChatCompletionStreamResponse{Usage: &platforms.TokenUsage{
+					PromptTokens:     int64(aws.ToInt32(v.Value.Usage.InputTokens)),
+					CompletionTokens: int64(aws.ToInt32(v.Value.Usage.OutputTokens)),
+					TotalTokens:      int64(aws.ToInt32(v.Value.Usage.TotalTokens)),
+				}}, nil
+			}
 			continue
 		case *types.ConverseStreamOutputMemberContentBlockStart:
 			continue

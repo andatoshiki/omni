@@ -13,6 +13,9 @@ providers:
       - name: deepseek-reasoner
         input_price: 0.55
         output_price: 2.19
+        thinking:  # optional per-model reasoning controls
+          mode: auto  # auto, enabled, or disabled
+          effort: high  # none, minimal, low, medium, high, xhigh, or max
 
   # Uncomment to add OpenAI support:
   # - name: openai
@@ -41,6 +44,9 @@ providers:
   #   models:
   #     - name: claude-sonnet-4-6
   #       temperature: 0.7
+  #       thinking:
+  #         mode: auto
+  #         effort: high
 
   # Uncomment to add xAI (Grok) support:
   # - name: xai
@@ -142,6 +148,9 @@ providers:
         input_price: 0.075
         output_price: 0.30
         temperature: 0.4
+        thinking:
+          mode: auto
+          budget_tokens: 1024  # Gemini 2.5 uses a budget; Gemini 3 uses effort
       - name: gemini-2.5-pro
         input_price: 1.25
         output_price: 5.00

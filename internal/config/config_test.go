@@ -417,6 +417,69 @@ telegram:
 	}
 }
 
+func TestParamsLoadThinkingConfig(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: deepseek
+    type: deepseek
+    api_key: sk-test
+    models:
+      - name: deepseek-reasoner
+        thinking:
+          mode: enabled
+          effort: high
+telegram:
+  bot_token: 123:test
+`)
+
+	var got Params
+	if err := got.Load(filename); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	thinking := got.Providers[0].Models[0].Thinking
+	if thinking == nil || thinking.Mode != "enabled" || thinking.Effort != "high" {
+		t.Fatalf("Thinking = %#v", thinking)
+	}
+}
+
+func TestParamsLoadRejectsInvalidThinkingConfig(t *testing.T) {
+	tests := []struct {
+		name         string
+		providerType string
+		model        string
+		thinking     string
+		want         string
+	}{
+		{name: "invalid mode", providerType: "deepseek", model: "deepseek-reasoner", thinking: "mode: sometimes", want: "mode must be one of"},
+		{name: "deepseek budget", providerType: "deepseek", model: "deepseek-reasoner", thinking: "mode: enabled\n          budget_tokens: 1024", want: "not supported by DeepSeek"},
+		{name: "anthropic small budget", providerType: "anthropic", model: "claude-test", thinking: "mode: enabled\n          budget_tokens: 512", want: "at least 1024"},
+		{name: "gemini conflicting depth", providerType: "google", model: "gemini-future", thinking: "mode: enabled\n          effort: high\n          budget_tokens: 512", want: "cannot be used together"},
+		{name: "unsupported provider", providerType: "cohere", model: "command-r", thinking: "mode: auto", want: "not supported"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filename := writeTestConfig(t, `
+providers:
+  - name: test-provider
+    type: `+tt.providerType+`
+    api_key: sk-test
+    models:
+      - name: `+tt.model+`
+        temperature: 1
+        thinking:
+          `+tt.thinking+`
+telegram:
+  bot_token: 123:test
+`)
+			var got Params
+			err := got.Load(filename)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Load() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestParamsLoadRejectsDuplicateProviderNames(t *testing.T) {
 	filename := writeTestConfig(t, `
 providers:
