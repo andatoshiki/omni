@@ -2,7 +2,6 @@ package bot
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,9 +18,8 @@ import (
 )
 
 type presenterTelegramClient struct {
-	mu             sync.Mutex
-	requests       []recordedTelegramRequest
-	failFirstDraft bool
+	mu       sync.Mutex
+	requests []recordedTelegramRequest
 }
 
 func (c *presenterTelegramClient) Do(request *http.Request) (*http.Response, error) {
@@ -34,17 +32,12 @@ func (c *presenterTelegramClient) Do(request *http.Request) (*http.Response, err
 	}
 	c.mu.Lock()
 	c.requests = append(c.requests, recordedTelegramRequest{method: request.URL.Path, form: form})
-	requestIndex := len(c.requests)
 	c.mu.Unlock()
 
 	status := http.StatusOK
 	body := `{"ok":true,"result":true}`
-	if strings.HasSuffix(request.URL.Path, "/sendRichMessageDraft") && c.failFirstDraft && requestIndex == 1 {
-		status = http.StatusBadRequest
-		body = `{"ok":false,"error_code":400,"description":"draft unavailable"}`
-	} else if strings.HasSuffix(request.URL.Path, "/sendMessage") ||
-		strings.HasSuffix(request.URL.Path, "/editMessageText") ||
-		strings.HasSuffix(request.URL.Path, "/sendRichMessage") {
+	if strings.HasSuffix(request.URL.Path, "/sendMessage") ||
+		strings.HasSuffix(request.URL.Path, "/editMessageText") {
 		chatID, _ := strconv.ParseInt(request.FormValue("chat_id"), 10, 64)
 		body = fmt.Sprintf(`{"ok":true,"result":{"message_id":99,"message_thread_id":42,"chat":{"id":%d,"type":"private"},"text":"preview"}}`, chatID)
 	}
@@ -76,16 +69,7 @@ func newPresenterTestHandler(t *testing.T, httpClient *presenterTelegramClient) 
 	return NewCommandHandler(&App{client: client, logger: logger, store: &transcriptCaptureStore{}})
 }
 
-func requestRichHTML(t *testing.T, request recordedTelegramRequest) string {
-	t.Helper()
-	var rich models.InputRichMessage
-	if err := json.Unmarshal([]byte(request.form["rich_message"]), &rich); err != nil {
-		t.Fatalf("decode rich_message: %v", err)
-	}
-	return rich.HTML
-}
-
-func TestPrivatePresenterUsesAnimatedRichDraft(t *testing.T) {
+func TestPrivatePresenterReplacesExpandableCallout(t *testing.T) {
 	recorder := &presenterTelegramClient{}
 	handler := newPresenterTestHandler(t, recorder)
 	message := &models.Message{ID: 17, MessageThreadID: 42, Chat: models.Chat{ID: 123, Type: models.ChatTypePrivate}}
@@ -93,37 +77,30 @@ func TestPrivatePresenterUsesAnimatedRichDraft(t *testing.T) {
 
 	presenter.start()
 	presenter.lastUpdate = time.Now().Add(-2 * time.Second)
-	presenter.appendReasoning("check </tg-thinking> safely")
+	presenter.appendReasoning("check <unsafe> safely")
 	presenter.showAnswer("Final <answer>")
-	presenter.heartbeat()
 	presenter.finish("Final answer")
 
 	requests := recorder.snapshot()
-	if len(requests) != 5 {
-		t.Fatalf("request count = %d, want 5: %#v", len(requests), requests)
+	if len(requests) != 4 {
+		t.Fatalf("request count = %d, want 4: %#v", len(requests), requests)
 	}
-	for _, index := range []int{0, 1, 2, 3} {
-		if !strings.HasSuffix(requests[index].method, "/sendRichMessageDraft") {
-			t.Fatalf("request %d method = %q", index, requests[index].method)
-		}
-		if requests[index].form["draft_id"] != "17" || requests[index].form["message_thread_id"] != "42" {
-			t.Fatalf("request %d form = %#v", index, requests[index].form)
-		}
+	if !strings.HasSuffix(requests[0].method, "/sendMessage") || !strings.Contains(requests[0].form["text"], "<blockquote expandable>") {
+		t.Fatalf("initial private callout = %#v", requests[0])
 	}
-	if initialHTML := requestRichHTML(t, requests[0]); !strings.Contains(initialHTML, "<tg-thinking>") {
-		t.Fatalf("initial draft = %q", initialHTML)
+	assertThinkingCalloutSpacing(t, requests[0].form["text"])
+	if requests[0].form["message_thread_id"] != "42" || requests[0].form["parse_mode"] != "HTML" {
+		t.Fatalf("private thread metadata = %#v", requests[0].form)
 	}
-	if reasoningHTML := requestRichHTML(t, requests[1]); !strings.Contains(reasoningHTML, "&lt;/tg-thinking&gt;") {
-		t.Fatalf("reasoning was not escaped: %q", reasoningHTML)
+	if !strings.Contains(requests[1].form["text"], "check &lt;unsafe&gt; safely") {
+		t.Fatalf("reasoning callout = %q", requests[1].form["text"])
 	}
-	if answerHTML := requestRichHTML(t, requests[2]); strings.Contains(answerHTML, "tg-thinking") || !strings.Contains(answerHTML, "Final &lt;answer&gt;") {
-		t.Fatalf("answer transition draft = %q", answerHTML)
+	assertThinkingCalloutSpacing(t, requests[1].form["text"])
+	if strings.Contains(requests[2].form["text"], "blockquote") || requests[2].form["text"] != "Final &lt;answer&gt;" {
+		t.Fatalf("answer transition = %#v", requests[2].form)
 	}
-	if requestRichHTML(t, requests[3]) != requestRichHTML(t, requests[2]) {
-		t.Fatalf("heartbeat changed draft content")
-	}
-	if !strings.HasSuffix(requests[4].method, "/sendRichMessage") || !strings.Contains(requestRichHTML(t, requests[4]), "Final answer") {
-		t.Fatalf("final rich message = %#v", requests[4])
+	if requests[3].form["text"] != "Final answer" {
+		t.Fatalf("final edit = %#v", requests[3].form)
 	}
 }
 
@@ -146,12 +123,14 @@ func TestGroupPresenterReplacesExpandableCallout(t *testing.T) {
 	if !strings.HasSuffix(requests[0].method, "/sendMessage") || !strings.Contains(requests[0].form["text"], "<blockquote expandable>") {
 		t.Fatalf("initial group callout = %#v", requests[0])
 	}
+	assertThinkingCalloutSpacing(t, requests[0].form["text"])
 	if requests[0].form["message_thread_id"] != "42" || requests[0].form["reply_parameters"] == "" {
 		t.Fatalf("group topic/reply metadata = %#v", requests[0].form)
 	}
 	if !strings.Contains(requests[1].form["text"], "checking &lt;unsafe&gt;") {
 		t.Fatalf("reasoning callout = %q", requests[1].form["text"])
 	}
+	assertThinkingCalloutSpacing(t, requests[1].form["text"])
 	if strings.Contains(requests[2].form["text"], "blockquote") || requests[2].form["text"] != "Answer starts" {
 		t.Fatalf("answer transition = %#v", requests[2].form)
 	}
@@ -160,20 +139,10 @@ func TestGroupPresenterReplacesExpandableCallout(t *testing.T) {
 	}
 }
 
-func TestPrivatePresenterFallsBackWhenDraftUnavailable(t *testing.T) {
-	recorder := &presenterTelegramClient{failFirstDraft: true}
-	handler := newPresenterTestHandler(t, recorder)
-	message := &models.Message{ID: 17, Chat: models.Chat{ID: 123, Type: models.ChatTypePrivate}}
-	presenter := newChatStreamPresenter(handler, context.Background(), message)
-
-	presenter.start()
-
-	requests := recorder.snapshot()
-	if len(requests) != 2 || !strings.HasSuffix(requests[0].method, "/sendRichMessageDraft") || !strings.HasSuffix(requests[1].method, "/sendMessage") {
-		t.Fatalf("fallback requests = %#v", requests)
-	}
-	if !strings.Contains(requests[1].form["text"], "<blockquote expandable>") {
-		t.Fatalf("fallback callout = %q", requests[1].form["text"])
+func assertThinkingCalloutSpacing(t *testing.T, text string) {
+	t.Helper()
+	if !strings.Contains(text, "💭 <b>Thinking…</b>\n\n<blockquote expandable>") {
+		t.Fatalf("thinking text = %q, want a blank line before the expandable blockquote", text)
 	}
 }
 

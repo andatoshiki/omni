@@ -88,7 +88,8 @@ type StreamDelta struct {
 }
 
 type StreamChoice struct {
-	Delta StreamDelta `json:"delta"`
+	Delta        StreamDelta `json:"delta"`
+	FinishReason string      `json:"finish_reason,omitempty"`
 }
 
 type ChatCompletionStreamResponse struct {

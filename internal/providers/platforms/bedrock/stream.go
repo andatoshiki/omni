@@ -53,9 +53,9 @@ func (s *bedrockStream) Recv() (*platforms.ChatCompletionStreamResponse, error) 
 				}
 			}
 		case *types.ConverseStreamOutputMemberMessageStop:
-			// The stream has successfully finished generating content.
-			// The overall stream channel will close shortly.
-			continue
+			return &platforms.ChatCompletionStreamResponse{
+				Choices: []platforms.StreamChoice{{FinishReason: string(v.Value.StopReason)}},
+			}, nil
 		case *types.ConverseStreamOutputMemberMetadata:
 			if v.Value.Usage != nil {
 				return &platforms.ChatCompletionStreamResponse{Usage: &platforms.TokenUsage{
