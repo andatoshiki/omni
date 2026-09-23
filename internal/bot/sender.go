@@ -213,42 +213,6 @@ func (a *App) editMessageHTML(ctx context.Context, message *models.Message, text
 	return msg, nil
 }
 
-func (a *App) sendRichMessageDraft(ctx context.Context, msg *models.Message, draftID int, html string) error {
-	if msg == nil {
-		return errors.New("cannot draft a response to a nil message")
-	}
-	_, err := a.client.SendRichMessageDraft(ctx, &telegram.SendRichMessageDraftParams{
-		ChatID:          msg.Chat.ID,
-		MessageThreadID: msg.MessageThreadID,
-		DraftID:         draftID,
-		RichMessage:     models.InputRichMessage{HTML: html},
-		CanStop:         false,
-	})
-	if err != nil {
-		a.logger.Error("telegram rich message draft failed", append(a.messageLogAttrs(msg), "draft_id", draftID, "error", err)...)
-	}
-	return err
-}
-
-func (a *App) sendRichMessage(ctx context.Context, msg *models.Message, text string) (*models.Message, error) {
-	if msg == nil {
-		return nil, errors.New("cannot send a rich response to a nil message")
-	}
-	params := &telegram.SendRichMessageParams{
-		ChatID:          msg.Chat.ID,
-		MessageThreadID: msg.MessageThreadID,
-		RichMessage:     models.InputRichMessage{HTML: telegramhtml.RenderMarkdown(text)},
-	}
-	sent, err := a.client.SendRichMessage(ctx, params)
-	if err == nil {
-		return sent, nil
-	}
-	attrs := append(a.messageLogAttrs(msg), "error", err)
-	attrs = append(attrs, a.textMetricAttrs("text", text)...)
-	a.logger.Error("telegram rich message send failed", attrs...)
-	return nil, err
-}
-
 func (a *App) deleteMessage(ctx context.Context, msg *models.Message) (bool, error) {
 	if msg == nil {
 		return false, nil

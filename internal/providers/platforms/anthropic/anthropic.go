@@ -307,11 +307,14 @@ func (s *messageStream) Recv() (*platforms.ChatCompletionStreamResponse, error) 
 			if promptTokens == 0 {
 				promptTokens = s.promptTokens
 			}
-			return &platforms.ChatCompletionStreamResponse{Usage: &platforms.TokenUsage{
-				PromptTokens:     promptTokens,
-				CompletionTokens: event.Usage.OutputTokens,
-				TotalTokens:      promptTokens + event.Usage.OutputTokens,
-			}}, nil
+			return &platforms.ChatCompletionStreamResponse{
+				Choices: []platforms.StreamChoice{{FinishReason: string(event.Delta.StopReason)}},
+				Usage: &platforms.TokenUsage{
+					PromptTokens:     promptTokens,
+					CompletionTokens: event.Usage.OutputTokens,
+					TotalTokens:      promptTokens + event.Usage.OutputTokens,
+				},
+			}, nil
 		case "message_stop":
 			return nil, io.EOF
 		}

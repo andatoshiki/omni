@@ -11,18 +11,10 @@ import (
 
 const (
 	// Provider output is HTML-escaped before it is sent. These conservative raw
-	// limits stay under Telegram's limits even when every character expands.
-	privateReasoningPreviewLimit = 5_000
-	groupReasoningPreviewLimit   = 600
-	privateDraftHeartbeat        = 15 * time.Second
-	previewFlushInterval         = 250 * time.Millisecond
-)
-
-type previewKind int
-
-const (
-	previewEditable previewKind = iota
-	previewRichDraft
+	// limits keep the shared callout under Telegram's message limit even when
+	// every character expands during HTML escaping.
+	reasoningPreviewLimit = 600
+	previewFlushInterval  = 250 * time.Millisecond
 )
 
 type previewPhase int
@@ -39,9 +31,7 @@ type chatStreamPresenter struct {
 	ctx     context.Context
 	source  *models.Message
 
-	kind            previewKind
 	phase           previewPhase
-	draftID         int
 	reply           *models.Message
 	reasoning       string
 	answer          string
@@ -71,21 +61,6 @@ func (p *chatStreamPresenter) start() {
 	if p == nil || p.source == nil {
 		return
 	}
-	if p.source.Chat.ID >= 0 {
-		p.kind = previewRichDraft
-		p.draftID = p.source.ID
-		if p.draftID <= 0 {
-			p.draftID = 1
-		}
-		html := p.thinkingHTML()
-		if err := p.handler.app.sendRichMessageDraft(p.ctx, p.source, p.draftID, html); err == nil {
-			p.lastHTML = html
-			p.lastUpdate = time.Now()
-			return
-		}
-	}
-
-	p.kind = previewEditable
 	p.sendInitialEditable(p.thinkingHTML())
 }
 
@@ -110,13 +85,9 @@ func (p *chatStreamPresenter) appendReasoning(delta string) {
 	if p == nil || p.phase == previewAnswering || delta == "" {
 		return
 	}
-	limit := groupReasoningPreviewLimit
-	if p.kind == previewRichDraft {
-		limit = privateReasoningPreviewLimit
-	}
 	p.reasoning += delta
-	if len(p.reasoning) > limit {
-		p.reasoning = tailUTF8(p.reasoning, limit)
+	if len(p.reasoning) > reasoningPreviewLimit {
+		p.reasoning = tailUTF8(p.reasoning, reasoningPreviewLimit)
 		p.reasoningCapped = true
 	}
 	p.flushThinking(false)
@@ -150,7 +121,7 @@ func (p *chatStreamPresenter) flushThinking(force bool) {
 	if !force && time.Since(p.lastUpdate) < p.updateInterval {
 		return
 	}
-	p.sendPreviewHTML(p.thinkingHTML(), false)
+	p.sendPreviewHTML(p.thinkingHTML())
 }
 
 func (p *chatStreamPresenter) flushAnswer(answer string, force bool) {
@@ -160,18 +131,7 @@ func (p *chatStreamPresenter) flushAnswer(answer string, force bool) {
 	if !force && time.Since(p.lastUpdate) < p.updateInterval {
 		return
 	}
-	p.sendPreviewHTML(p.answerHTML(answer), false)
-}
-
-func (p *chatStreamPresenter) heartbeat() {
-	if p == nil || p.kind != previewRichDraft || p.updatesDisabled {
-		return
-	}
-	html := p.thinkingHTML()
-	if p.phase == previewAnswering {
-		html = p.answerHTML(p.answer)
-	}
-	p.sendPreviewHTML(html, true)
+	p.sendPreviewHTML(p.answerHTML(answer))
 }
 
 func (p *chatStreamPresenter) answerHTML(answer string) string {
@@ -183,20 +143,10 @@ func (p *chatStreamPresenter) answerHTML(answer string) string {
 	return preview
 }
 
-func (p *chatStreamPresenter) sendPreviewHTML(html string, heartbeat bool) {
-	if !heartbeat && html == p.lastHTML {
+func (p *chatStreamPresenter) sendPreviewHTML(html string) {
+	if html == p.lastHTML {
 		return
 	}
-	if p.kind == previewRichDraft {
-		if err := p.handler.app.sendRichMessageDraft(p.ctx, p.source, p.draftID, html); err != nil {
-			p.updatesDisabled = true
-			return
-		}
-		p.lastHTML = html
-		p.lastUpdate = time.Now()
-		return
-	}
-
 	if p.reply == nil {
 		p.sendInitialEditable(html)
 		return
@@ -229,21 +179,11 @@ func (p *chatStreamPresenter) thinkingHTML() string {
 		}
 	}
 	body = stdhtml.EscapeString(body)
-	if p.source != nil && p.source.Chat.ID >= 0 && p.kind != previewEditable {
-		return "<tg-thinking>Thinking…\n\n" + body + "</tg-thinking>"
-	}
-	return "💭 <b>Thinking…</b>\n<blockquote expandable>" + body + "</blockquote>"
+	return "💭 <b>Thinking…</b>\n\n<blockquote expandable>" + body + "</blockquote>"
 }
 
 func (p *chatStreamPresenter) fail(text string) {
 	if p == nil || p.source == nil {
-		return
-	}
-	if p.kind == previewRichDraft {
-		if _, err := p.handler.app.sendRichMessage(p.ctx, p.source, text); err == nil {
-			return
-		}
-		_, _ = p.handler.app.sendMessageInThread(p.ctx, p.source.Chat.ID, p.source.MessageThreadID, text)
 		return
 	}
 	if p.reply != nil {
@@ -261,19 +201,6 @@ func (p *chatStreamPresenter) finish(text string) {
 		return
 	}
 	chunks := splitText(text, streamPreviewLimit)
-	if p.kind == previewRichDraft {
-		for _, chunk := range chunks {
-			sent, err := p.handler.app.sendRichMessage(p.ctx, p.source, chunk)
-			if err != nil {
-				sent, err = p.handler.app.sendMessageInThread(p.ctx, p.source.Chat.ID, p.source.MessageThreadID, chunk)
-			}
-			if err == nil {
-				p.handler.saveAssistantTranscriptMessage(p.source, sent, chunk)
-			}
-		}
-		return
-	}
-
 	start := 0
 	if p.reply != nil {
 		first, err := p.handler.app.editReplyToMessage(p.ctx, p.reply, chunks[0])

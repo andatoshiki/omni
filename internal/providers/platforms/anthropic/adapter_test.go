@@ -91,6 +91,9 @@ func TestAdapterTranslatesAndStreamsAnthropicMessages(t *testing.T) {
 	if third.Usage == nil || *third.Usage != *wantUsage {
 		t.Fatalf("third Recv() usage = %#v, want %#v", third.Usage, wantUsage)
 	}
+	if len(third.Choices) != 1 || third.Choices[0].FinishReason != "end_turn" {
+		t.Fatalf("third Recv() finish reason = %#v, want end_turn", third.Choices)
+	}
 	if _, err := stream.Recv(); !errors.Is(err, io.EOF) {
 		t.Fatalf("final Recv() error = %v, want EOF", err)
 	}

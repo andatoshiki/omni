@@ -43,25 +43,25 @@ func (c *CommandHandler) logChatCompletion(
 	msg *models.Message,
 	modelID providers.ModelID,
 	startedAt time.Time,
-	text string,
-	usage *providers.TokenUsage,
-	previewCapped bool,
+	result chatStreamResult,
 ) {
 	attrs := append(
 		c.app.messageLogAttrs(msg),
 		"provider", modelID.Provider,
 		"model", modelID.Model,
 		"duration_ms", time.Since(startedAt).Milliseconds(),
-		"preview_capped", previewCapped,
-		"response_chunks", len(splitText(text, streamPreviewLimit)),
+		"preview_capped", result.previewCapped,
+		"response_chunks", len(splitText(result.text, streamPreviewLimit)),
+		"finish_reason", result.finishReason,
+		"reasoning_received", result.sawReasoning,
 	)
-	attrs = append(attrs, c.app.textMetricAttrs("response", text)...)
-	if usage != nil {
+	attrs = append(attrs, c.app.textMetricAttrs("response", result.text)...)
+	if result.usage != nil {
 		attrs = append(
 			attrs,
-			"prompt_tokens", usage.PromptTokens,
-			"completion_tokens", usage.CompletionTokens,
-			"total_tokens", usage.TotalTokens,
+			"prompt_tokens", result.usage.PromptTokens,
+			"completion_tokens", result.usage.CompletionTokens,
+			"total_tokens", result.usage.TotalTokens,
 		)
 	}
 	c.app.logger.Info("ai chat response completed", attrs...)

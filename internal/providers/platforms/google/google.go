@@ -188,16 +188,26 @@ func translateGeminiResponse(resp *genai.GenerateContentResponse) *platforms.Cha
 	if resp == nil {
 		return chunk
 	}
-	if len(resp.Candidates) > 0 && resp.Candidates[0] != nil && resp.Candidates[0].Content != nil {
-		for _, part := range resp.Candidates[0].Content.Parts {
-			if part == nil || part.Text == "" {
-				continue
+	if len(resp.Candidates) > 0 && resp.Candidates[0] != nil {
+		candidate := resp.Candidates[0]
+		if candidate.Content != nil {
+			for _, part := range candidate.Content.Parts {
+				if part == nil || part.Text == "" {
+					continue
+				}
+				delta := platforms.StreamDelta{Content: part.Text}
+				if part.Thought {
+					delta = platforms.StreamDelta{ReasoningContent: part.Text}
+				}
+				chunk.Choices = append(chunk.Choices, platforms.StreamChoice{Delta: delta})
 			}
-			delta := platforms.StreamDelta{Content: part.Text}
-			if part.Thought {
-				delta = platforms.StreamDelta{ReasoningContent: part.Text}
+		}
+		if finishReason := string(candidate.FinishReason); finishReason != "" {
+			if len(chunk.Choices) == 0 {
+				chunk.Choices = append(chunk.Choices, platforms.StreamChoice{FinishReason: finishReason})
+			} else {
+				chunk.Choices[len(chunk.Choices)-1].FinishReason = finishReason
 			}
-			chunk.Choices = append(chunk.Choices, platforms.StreamChoice{Delta: delta})
 		}
 	}
 	if resp.UsageMetadata != nil {

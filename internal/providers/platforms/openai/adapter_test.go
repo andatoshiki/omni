@@ -167,6 +167,7 @@ func TestReasoningRequestAndDelta(t *testing.T) {
 		}
 		stream := "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"checking\"}}]}\n\n" +
 			"data: {\"choices\":[{\"delta\":{\"content\":\"answer\"}}]}\n\n" +
+			"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n" +
 			"data: [DONE]\n\n"
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -208,6 +209,10 @@ func TestReasoningRequestAndDelta(t *testing.T) {
 	answer, err := stream.Recv()
 	if err != nil || answer.Choices[0].Delta.Content != "answer" {
 		t.Fatalf("answer delta = %#v, %v", answer, err)
+	}
+	finished, err := stream.Recv()
+	if err != nil || finished.Choices[0].FinishReason != "length" {
+		t.Fatalf("finish reason = %#v, %v", finished, err)
 	}
 }
 

@@ -41,12 +41,22 @@ func TestApplyThinkingConfig(t *testing.T) {
 
 func TestGeminiStreamSeparatesThoughtParts(t *testing.T) {
 	response := translateGeminiResponse(&genai.GenerateContentResponse{Candidates: []*genai.Candidate{{
+		FinishReason: genai.FinishReasonMaxTokens,
 		Content: &genai.Content{Parts: []*genai.Part{
 			{Text: "summary", Thought: true},
 			{Text: "answer"},
 		}},
 	}}})
-	if len(response.Choices) != 2 || response.Choices[0].Delta.ReasoningContent != "summary" || response.Choices[1].Delta.Content != "answer" {
+	if len(response.Choices) != 2 || response.Choices[0].Delta.ReasoningContent != "summary" || response.Choices[1].Delta.Content != "answer" || response.Choices[1].FinishReason != "MAX_TOKENS" {
+		t.Fatalf("translated response = %#v", response)
+	}
+}
+
+func TestGeminiStreamKeepsFinishReasonWithoutContent(t *testing.T) {
+	response := translateGeminiResponse(&genai.GenerateContentResponse{Candidates: []*genai.Candidate{{
+		FinishReason: genai.FinishReasonMaxTokens,
+	}}})
+	if len(response.Choices) != 1 || response.Choices[0].FinishReason != "MAX_TOKENS" {
 		t.Fatalf("translated response = %#v", response)
 	}
 }
