@@ -44,7 +44,9 @@ func TestCanExport(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := command.CanExport(test.msg, []int64{101}, []int64{202})
+			got := command.CanExport(test.msg, func(userID int64) bool {
+				return userID == 101 || userID == 202
+			})
 			if got != test.want {
 				t.Fatalf("canExport() = %v, want %v", got, test.want)
 			}
@@ -69,5 +71,18 @@ func TestSummaryCommandIsRegistered(t *testing.T) {
 	}
 	if route.Description != "Summarize recent text messages" {
 		t.Fatalf("summary description = %q", route.Description)
+	}
+}
+
+func TestUserAccessCommandsAreRegistered(t *testing.T) {
+	handler := NewCommandHandler(nil)
+	for _, name := range []string{"addusr", "delusr"} {
+		route, ok := handler.routes[name]
+		if !ok {
+			t.Fatalf("%s command is not registered", name)
+		}
+		if route.Hidden || !strings.HasPrefix(route.Description, "Admin:") {
+			t.Fatalf("%s route = %#v", name, route)
+		}
 	}
 }

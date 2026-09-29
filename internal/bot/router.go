@@ -19,6 +19,13 @@ func (a *App) handleMessage(ctx context.Context, update *models.Update) {
 	if msg == nil {
 		return
 	}
+	if !a.chatAllowsIdentityObservation(msg.Chat.ID) {
+		a.logger.Warn("telegram message ignored: group not allowed", a.messageLogAttrs(msg)...)
+		return
+	}
+	if err := a.access.observe(msg.From); err != nil {
+		a.logger.Error("failed to observe telegram user", append(a.messageLogAttrs(msg), "error", err)...)
+	}
 	messageText := telegramMessageText(msg)
 	routable := isRoutableTelegramMessage(msg)
 	if messageText == "" && !routable {
@@ -48,6 +55,10 @@ func (a *App) handleMessage(ctx context.Context, update *models.Update) {
 	}
 
 	a.processMessages(ctx, msg)
+}
+
+func (a *App) chatAllowsIdentityObservation(chatID int64) bool {
+	return chatID >= 0 || slices.Contains(a.params.AllowedGroupIDs, chatID)
 }
 
 type ChatInput struct {
@@ -131,7 +142,7 @@ func (a *App) processMessages(ctx context.Context, msgs ...*models.Message) {
 
 func (a *App) messageAllowed(msg *models.Message) bool {
 	if msg.Chat.ID >= 0 {
-		return msg.From != nil && slices.Contains(a.params.AllowedUserIDs, msg.From.ID)
+		return msg.From != nil && a.access.isAuthorized(msg.From.ID)
 	}
 	return slices.Contains(a.params.AllowedGroupIDs, msg.Chat.ID)
 }
@@ -226,8 +237,12 @@ func replyTargetsBot(msg *models.Message, botID int64) bool {
 }
 
 func (a *App) routeCommand(ctx context.Context, msg *models.Message) {
-	commandToken := strings.Fields(msg.Text)[0]
-	commandToken = strings.SplitN(commandToken, "@", 2)[0]
+	rawCommandToken := strings.Fields(msg.Text)[0]
+	if !commandTargetsBot(rawCommandToken, a.botUsername) {
+		a.logger.Info("telegram command ignored: addressed to another bot", a.messageLogAttrs(msg)...)
+		return
+	}
+	commandToken := strings.SplitN(rawCommandToken, "@", 2)[0]
 	prefix := string(commandToken[0])
 	command := strings.TrimPrefix(commandToken, prefix)
 	msg.Text = strings.TrimSpace(strings.TrimPrefix(msg.Text, strings.Fields(msg.Text)[0]))
@@ -246,6 +261,15 @@ func (a *App) routeCommand(ctx context.Context, msg *models.Message) {
 	if msg.Chat.ID >= 0 {
 		_, _ = a.sendReplyToMessage(ctx, msg, errorMessage(errors.New("invalid command")))
 	}
+}
+
+func commandTargetsBot(commandToken, botUsername string) bool {
+	_, target, addressed := strings.Cut(commandToken, "@")
+	if !addressed {
+		return true
+	}
+	botUsername = strings.TrimPrefix(strings.TrimSpace(botUsername), "@")
+	return target != "" && botUsername != "" && strings.EqualFold(target, botUsername)
 }
 
 func (a *App) updateHandler(ctx context.Context, _ *telegram.Bot, update *models.Update) {

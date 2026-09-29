@@ -10,9 +10,8 @@ import (
 
 func TestMessageAllowed(t *testing.T) {
 	app := &App{params: &config.Params{
-		AllowedUserIDs:  []int64{10},
 		AllowedGroupIDs: []int64{-100},
-	}}
+	}, access: newTestAccessManager([]int64{10}, 99)}
 	tests := []struct {
 		name string
 		msg  *models.Message
@@ -51,6 +50,73 @@ func TestMessageAllowed(t *testing.T) {
 				t.Fatalf("messageAllowed() = %t, want %t", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIdentityObservationScope(t *testing.T) {
+	app := &App{params: &config.Params{AllowedGroupIDs: []int64{-100}}}
+	if !app.chatAllowsIdentityObservation(42) {
+		t.Fatal("private chat should be observed before user authorization")
+	}
+	if !app.chatAllowsIdentityObservation(-100) {
+		t.Fatal("allowed group should be observed")
+	}
+	if app.chatAllowsIdentityObservation(-200) {
+		t.Fatal("unallowed group should not create observed-user state")
+	}
+}
+
+func TestCallbackAllowedUsesSameAccessPolicy(t *testing.T) {
+	app := &App{
+		params: &config.Params{AllowedGroupIDs: []int64{-100}},
+		access: newTestAccessManager([]int64{10}, 99),
+	}
+	if !app.callbackAllowed(&models.CallbackQuery{From: models.User{ID: 10}}, 10) {
+		t.Fatal("allowed private callback was rejected")
+	}
+	if app.callbackAllowed(&models.CallbackQuery{From: models.User{ID: 20}}, 20) {
+		t.Fatal("revoked private callback was accepted")
+	}
+	if !app.callbackAllowed(&models.CallbackQuery{From: models.User{ID: 20}}, -100) {
+		t.Fatal("callback in allowed group was rejected")
+	}
+}
+
+func TestCommandTargetsBot(t *testing.T) {
+	tests := []struct {
+		name  string
+		token string
+		want  bool
+	}{
+		{name: "plain command", token: "/addusr", want: true},
+		{name: "this bot", token: "/addusr@omni_bot", want: true},
+		{name: "this bot case insensitive", token: "/addusr@OMNI_BOT", want: true},
+		{name: "another bot", token: "/addusr@other_bot", want: false},
+		{name: "empty target", token: "/addusr@", want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := commandTargetsBot(test.token, "omni_bot"); got != test.want {
+				t.Fatalf("commandTargetsBot(%q) = %t, want %t", test.token, got, test.want)
+			}
+		})
+	}
+}
+
+func TestRemovingUserRevokesMessagesAndCallbacks(t *testing.T) {
+	app := &App{params: &config.Params{}, access: newTestAccessManager([]int64{10}, 99)}
+	message := &models.Message{Chat: models.Chat{ID: 10}, From: &models.User{ID: 10}}
+	query := &models.CallbackQuery{From: models.User{ID: 10}}
+	if !app.messageAllowed(message) || !app.callbackAllowed(query, 10) {
+		t.Fatal("test user was not initially allowed")
+	}
+	app.access.store = newAccessTestStore()
+	if _, err := app.access.remove("10"); err != nil {
+		t.Fatal(err)
+	}
+	if app.messageAllowed(message) || app.callbackAllowed(query, 10) {
+		t.Fatal("removed user retained message or callback access")
 	}
 }
 

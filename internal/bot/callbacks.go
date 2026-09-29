@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	telegram "github.com/go-telegram/bot"
@@ -18,6 +19,19 @@ func (a *App) handleCallbackQuery(ctx context.Context, query *models.CallbackQue
 
 	chatID, messageID := callbackMessageIDs(query)
 	if chatID == 0 {
+		return
+	}
+	if !a.chatAllowsIdentityObservation(chatID) {
+		a.logger.Warn("telegram callback ignored: group not allowed", "chat_id", chatID, "user_id", query.From.ID, "username", query.From.Username)
+		a.answerCallback(ctx, query.ID, "❌ You are not authorized to use this bot", true)
+		return
+	}
+	if err := a.access.observe(&query.From); err != nil {
+		a.logger.Error("failed to observe telegram callback user", "user_id", query.From.ID, "username", query.From.Username, "error", err)
+	}
+	if !a.callbackAllowed(query, chatID) {
+		a.logger.Warn("telegram callback ignored: user not allowed", "chat_id", chatID, "user_id", query.From.ID, "username", query.From.Username)
+		a.answerCallback(ctx, query.ID, "❌ You are not authorized to use this bot", true)
 		return
 	}
 
@@ -38,6 +52,13 @@ func (a *App) handleCallbackQuery(ctx context.Context, query *models.CallbackQue
 	if modelID, ok := providers.ParseModelCallback(query.Data); ok {
 		a.selectModel(ctx, query, chatID, messageID, modelID)
 	}
+}
+
+func (a *App) callbackAllowed(query *models.CallbackQuery, chatID int64) bool {
+	if chatID >= 0 {
+		return query.From.ID > 0 && a.access.isAuthorized(query.From.ID)
+	}
+	return slices.Contains(a.params.AllowedGroupIDs, chatID)
 }
 
 func (a *App) showProviderPage(ctx context.Context, query *models.CallbackQuery, chatID int64, messageID, page int) {

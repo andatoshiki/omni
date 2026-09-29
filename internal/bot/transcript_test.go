@@ -58,9 +58,10 @@ func TestUnsupportedMediaCaptionIsTranscriptOnly(t *testing.T) {
 func TestHandleMessageCapturesUnsupportedMediaCaptionForSummary(t *testing.T) {
 	store := &transcriptCaptureStore{}
 	app := &App{
-		params: &config.Params{AllowedUserIDs: []int64{42}},
+		params: &config.Params{},
 		store:  store,
 		logger: slog.Default(),
+		access: newTestAccessManager([]int64{42}, 99),
 	}
 	app.handleMessage(context.Background(), &models.Update{Message: &models.Message{
 		ID: 12, MessageThreadID: 3,

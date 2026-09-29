@@ -126,6 +126,18 @@ func (b testBotContext) DeleteSessionCache(int64) {}
 
 func (b testBotContext) AnswerCallback(context.Context, string, string, bool) {}
 
+func (b testBotContext) IsAdmin(int64) bool { return false }
+
+func (b testBotContext) IsUserAuthorized(int64) bool { return false }
+
+func (b testBotContext) AddAllowedUser(string) (storage.TelegramUser, bool, error) {
+	return storage.TelegramUser{}, false, nil
+}
+
+func (b testBotContext) DeleteAllowedUser(string) (storage.TelegramUser, bool, error) {
+	return storage.TelegramUser{}, false, nil
+}
+
 type sessionListStore struct {
 	storage.Store
 	sessions  []storage.SessionMeta

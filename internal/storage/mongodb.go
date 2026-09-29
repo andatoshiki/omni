@@ -30,6 +30,8 @@ type mongoStore struct {
 	userContext       *mongo.Collection
 	tokenUsage        *mongo.Collection
 	chatModels        *mongo.Collection
+	telegramUsers     *mongo.Collection
+	telegramUsernames *mongo.Collection
 	counters          *mongo.Collection
 }
 
@@ -115,6 +117,24 @@ type mongoChatModelDocument struct {
 	UpdatedAt time.Time `bson:"updated_at"`
 }
 
+type mongoTelegramUserDocument struct {
+	UserID             int64         `bson:"_id"`
+	Username           string        `bson:"username,omitempty"`
+	NormalizedUsername string        `bson:"normalized_username,omitempty"`
+	IdentityToken      bson.ObjectID `bson:"identity_token,omitempty"`
+	Allowed            bool          `bson:"allowed"`
+	CreatedAt          time.Time     `bson:"created_at"`
+	UpdatedAt          time.Time     `bson:"updated_at"`
+}
+
+type mongoTelegramUsernameDocument struct {
+	NormalizedUsername string        `bson:"_id"`
+	UserID             int64         `bson:"user_id"`
+	Username           string        `bson:"username"`
+	IdentityToken      bson.ObjectID `bson:"identity_token"`
+	UpdatedAt          time.Time     `bson:"updated_at"`
+}
+
 type mongoCounterDocument struct {
 	Sequence int64 `bson:"sequence"`
 }
@@ -142,7 +162,16 @@ func newMongoDBStore(cfg config.MongoDBConfig) (Store, error) {
 		userContext:       database.Collection("user_context"),
 		tokenUsage:        database.Collection("token_usage"),
 		chatModels:        database.Collection("chat_models"),
+		telegramUsers:     database.Collection("telegram_users"),
+		telegramUsernames: database.Collection("telegram_usernames"),
 		counters:          database.Collection("counters"),
+	}
+	migrationContext, cancelMigration := mongodbContext()
+	err = db.migrateTelegramAccess(migrationContext)
+	cancelMigration()
+	if err != nil {
+		disconnectMongoClient(client)
+		return nil, fmt.Errorf("failed to migrate mongodb telegram access: %w", err)
 	}
 	indexContext, cancelIndexes := mongodbContext()
 	err = db.createIndexes(indexContext)
@@ -183,13 +212,15 @@ func (db *mongoStore) createIndexes(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	_, err := db.tokenUsage.Indexes().CreateMany(ctx, []mongo.IndexModel{
+	if _, err := db.tokenUsage.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "chat_id", Value: 1}, {Key: "user_id", Value: 1}},
 			Options: options.Index().SetName("idx_token_usage_chat_user"),
 		},
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (db *mongoStore) SaveSession(chatID int64, sessionID int64, messages []conversation.Message) error {

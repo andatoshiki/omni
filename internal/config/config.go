@@ -35,8 +35,7 @@ type Params struct {
 	MaxSessionsDisplayed int
 	TitleModel           string
 
-	AllowedUserIDs  []int64
-	AdminUserIDs    []int64
+	AdminUser       TelegramUserReference
 	AllowedGroupIDs []int64
 }
 
@@ -150,15 +149,8 @@ func (p *Params) Load(filename string) error {
 		SessionTimeout:       sessionTimeout,
 		MaxSessionsDisplayed: cfg.Global.MaxSessionsDisplayed,
 		TitleModel:           strings.TrimSpace(cfg.Global.TitleModel),
-		AllowedUserIDs:       deduplicateIDs(cfg.Telegram.AllowedUserIDs),
-		AdminUserIDs:         deduplicateIDs(cfg.Telegram.AdminUserIDs),
+		AdminUser:            cfg.Telegram.AdminUser,
 		AllowedGroupIDs:      deduplicateIDs(cfg.Telegram.AllowedGroupIDs),
-	}
-
-	for _, id := range p.AdminUserIDs {
-		if !slices.Contains(p.AllowedUserIDs, id) {
-			p.AllowedUserIDs = append(p.AllowedUserIDs, id)
-		}
 	}
 
 	return p.validate()
@@ -274,6 +266,9 @@ func (p *Params) validate() error {
 	}
 	if p.BotToken == "" {
 		return fmt.Errorf("telegram.bot_token is required")
+	}
+	if p.AdminUser.IsZero() {
+		return fmt.Errorf("telegram.admin_user is required")
 	}
 	switch p.Database.Backend {
 	case "sqlite":
