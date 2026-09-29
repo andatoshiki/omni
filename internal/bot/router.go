@@ -156,20 +156,20 @@ func isTelegramUsernameCharacter(char byte) bool {
 	return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_'
 }
 
-// stripOmniWakeWord detects a standalone "Omni" at the beginning of a
-// message or sentence. It removes the wake word and its adjacent separator
-// while preserving any earlier sentences as context for the model.
-func stripOmniWakeWord(text string) (string, bool) {
-	const wakeWord = "Omni"
+const omniWakeWord = "omni"
 
+// stripOmniWakeWord detects the single wake word "omni" case-insensitively at
+// the beginning of a message or sentence. It removes the wake word and its
+// adjacent separator while preserving any earlier sentences as model context.
+func stripOmniWakeWord(text string) (string, bool) {
 	atSentenceStart := true
 	for i, char := range text {
 		if atSentenceStart {
 			if unicode.IsSpace(char) {
 				continue
 			}
-			if hasWakeWordAt(text, i, wakeWord) {
-				end := i + len(wakeWord)
+			if hasOmniWakeWordAt(text, i) {
+				end := i + len(omniWakeWord)
 				for end < len(text) {
 					separator, size := utf8.DecodeRuneInString(text[end:])
 					if !unicode.IsSpace(separator) && !isWakeWordSeparator(separator) {
@@ -190,9 +190,9 @@ func stripOmniWakeWord(text string) (string, bool) {
 	return text, false
 }
 
-func hasWakeWordAt(text string, start int, wakeWord string) bool {
-	end := start + len(wakeWord)
-	if end > len(text) || !strings.EqualFold(text[start:end], wakeWord) {
+func hasOmniWakeWordAt(text string, start int) bool {
+	end := start + len(omniWakeWord)
+	if end > len(text) || !strings.EqualFold(text[start:end], omniWakeWord) {
 		return false
 	}
 	if end == len(text) {

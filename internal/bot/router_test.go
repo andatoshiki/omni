@@ -131,13 +131,25 @@ func TestStripOmniWakeWord(t *testing.T) {
 		wantWake   bool
 	}{
 		{
-			name:       "wake word at message start",
+			name:       "title case wake word",
 			text:       "Omni, what is 2+2?",
 			wantPrompt: "what is 2+2?",
 			wantWake:   true,
 		},
 		{
-			name:       "case insensitive wake word",
+			name:       "lowercase wake word",
+			text:       "omni help me",
+			wantPrompt: "help me",
+			wantWake:   true,
+		},
+		{
+			name:       "uppercase wake word",
+			text:       "OMNI: help me",
+			wantPrompt: "help me",
+			wantWake:   true,
+		},
+		{
+			name:       "mixed case wake word",
 			text:       "oMnI: help me",
 			wantPrompt: "help me",
 			wantWake:   true,
