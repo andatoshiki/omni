@@ -133,14 +133,6 @@ func (c *CommandHandler) reply(ctx context.Context, msg *models.Message, text st
 	return c.app.sendReplyToMessage(ctx, msg, text)
 }
 
-func (c *CommandHandler) editReply(ctx context.Context, msg *models.Message, replyMsg *models.Message, text string) (replyMessage *models.Message, err error) {
-	if replyMsg == nil || msg == nil {
-		return c.reply(ctx, msg, text)
-	}
-
-	return c.app.editReplyToMessage(ctx, replyMsg, text)
-}
-
 func (c *CommandHandler) CurrentModel(chatID int64) providers.ModelID {
 	if selected, ok := c.app.store.LoadChatModel(chatID); ok {
 		if _, err := c.app.providers.Resolve(selected); err == nil {
