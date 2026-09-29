@@ -3,7 +3,6 @@ package command
 import (
 	"context"
 	"os"
-	"slices"
 	"time"
 
 	telegram "github.com/go-telegram/bot"
@@ -11,8 +10,7 @@ import (
 )
 
 func Export(ctx context.Context, b BotContext, msg *models.Message) {
-	params := b.Config()
-	if !CanExport(msg, params.AllowedUserIDs, params.AdminUserIDs) {
+	if !CanExport(msg, b.IsUserAuthorized) {
 		b.Logger().Warn("memory export denied", b.MessageLogAttrs(msg)...)
 		_, _ = b.Reply(ctx, msg, "❌ You are not authorized to export conversation data")
 		return
@@ -45,9 +43,9 @@ func Export(ctx context.Context, b BotContext, msg *models.Message) {
 	}
 }
 
-func CanExport(msg *models.Message, allowedUserIDs, adminUserIDs []int64) bool {
+func CanExport(msg *models.Message, isAuthorized func(int64) bool) bool {
 	if msg == nil || msg.From == nil {
 		return false
 	}
-	return slices.Contains(allowedUserIDs, msg.From.ID) || slices.Contains(adminUserIDs, msg.From.ID)
+	return isAuthorized != nil && isAuthorized(msg.From.ID)
 }

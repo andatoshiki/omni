@@ -31,7 +31,18 @@ type Store interface {
 	GetTokenUsage(chatID, userID int64) (TokenUsageSummary, error)
 	SaveChatModel(chatID int64, provider, model string) error
 	LoadChatModel(chatID int64) (providers.ModelID, bool)
+	LoadTelegramUsers() ([]TelegramUser, error)
+	ObserveTelegramUser(userID int64, username, normalizedUsername string) error
+	SetTelegramUserAllowed(userID int64, allowed bool) error
 	Close() error
+}
+
+// TelegramUser is the persisted identity and access state for one Telegram user.
+type TelegramUser struct {
+	UserID             int64
+	Username           string
+	NormalizedUsername string
+	Allowed            bool
 }
 
 type TokenUsageSummary struct {

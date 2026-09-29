@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
 
+	"github.com/andatoshiki/omni/internal/config"
 	"github.com/andatoshiki/omni/internal/conversation"
 	"github.com/andatoshiki/omni/internal/providers"
 )
@@ -45,6 +48,109 @@ func TestTokenUsageIsAggregatedPerUserAndChat(t *testing.T) {
 	want := (TokenUsageSummary{Requests: 2, PromptTokens: 30, CompletionTokens: 13, TotalTokens: 43})
 	if summary != want {
 		t.Fatalf("summary = %#v, want %#v", summary, want)
+	}
+}
+
+func TestSQLiteTelegramUserAccessPersistsAndMovesUsernames(t *testing.T) {
+	t.Parallel()
+
+	connection, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if err := migrateSQLiteSchema(connection); err != nil {
+		t.Fatal(err)
+	}
+	database := &sqliteStore{conn: connection}
+
+	if err := database.ObserveTelegramUser(10, "Alice", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetTelegramUserAllowed(10, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ObserveTelegramUser(20, "Alice", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetTelegramUserAllowed(20, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetTelegramUserAllowed(20, true); err != nil {
+		t.Fatal(err)
+	}
+
+	users, err := database.LoadTelegramUsers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := make(map[int64]TelegramUser, len(users))
+	for _, user := range users {
+		byID[user.UserID] = user
+	}
+	if !byID[10].Allowed || byID[10].NormalizedUsername != "" {
+		t.Fatalf("original username owner = %#v", byID[10])
+	}
+	if !byID[20].Allowed || byID[20].NormalizedUsername != "alice" {
+		t.Fatalf("new username owner = %#v", byID[20])
+	}
+	if err := database.SetTelegramUserAllowed(20, false); err != nil {
+		t.Fatal(err)
+	}
+	users, err = database.LoadTelegramUsers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, user := range users {
+		if user.UserID == 20 && user.Allowed {
+			t.Fatal("deleted access remained allowed")
+		}
+	}
+}
+
+func TestSQLSchemasIncludeTelegramUserAccess(t *testing.T) {
+	for name, schema := range map[string]string{
+		"sqlite":   sqliteSchema,
+		"mysql":    mysqlSchema,
+		"postgres": postgresSchema,
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, required := range []string{"CREATE TABLE IF NOT EXISTS telegram_users", "normalized_username", "allowed BOOLEAN"} {
+				if !strings.Contains(schema, required) {
+					t.Fatalf("schema does not contain %q", required)
+				}
+			}
+		})
+	}
+}
+
+func TestSQLiteTelegramUserAccessSurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "access.db")
+	firstStore, err := newSQLiteStore(config.SQLiteConfig{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := firstStore.ObserveTelegramUser(42, "Alice", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if err := firstStore.SetTelegramUserAllowed(42, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := firstStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	secondStore, err := newSQLiteStore(config.SQLiteConfig{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secondStore.Close()
+	users, err := secondStore.LoadTelegramUsers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 || users[0].UserID != 42 || users[0].NormalizedUsername != "alice" || !users[0].Allowed {
+		t.Fatalf("reopened users = %#v", users)
 	}
 }
 

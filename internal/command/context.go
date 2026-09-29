@@ -34,4 +34,8 @@ type BotContext interface {
 	MessageLogAttrs(msg *models.Message) []any
 	DeleteSessionCache(sessionID int64)
 	AnswerCallback(ctx context.Context, queryID, text string, showAlert bool)
+	IsAdmin(userID int64) bool
+	IsUserAuthorized(userID int64) bool
+	AddAllowedUser(reference string) (storage.TelegramUser, bool, error)
+	DeleteAllowedUser(reference string) (storage.TelegramUser, bool, error)
 }

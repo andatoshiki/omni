@@ -237,7 +237,8 @@ global:
 
 telegram:
   bot_token: ""
-  allowed_user_ids: []
-  admin_user_ids: []
+  # Required. Use one numeric Telegram user ID (safest) or a quoted personal username.
+  # admin_user: 123456789
+  admin_user: "@andatoshiki"
   # Use numeric chat IDs (usually negative, such as -1001234567890).
   allowed_group_ids: []

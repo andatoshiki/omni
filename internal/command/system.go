@@ -23,6 +23,8 @@ A versatile, Go-based Telegram bot supporting multiple AI platforms; with persis
 /clearprompt - Revert to the default system prompt
 /export - Download your entire chat history as a JSON file
 /summary - Summarize the most recent text messages in this chat or topic
+/addusr - Admin: allow a user by @username, numeric ID, or reply
+/delusr - Admin: remove a user by @username, numeric ID, or reply
 /version - View build metadata and active Go environment
 /help - Show this comprehensive help message`
 

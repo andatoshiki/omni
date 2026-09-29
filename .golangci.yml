@@ -1,0 +1,25 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    staticcheck:
+      # Match the checks used by the former v1 defaults. In v2, stylecheck and
+      # quickfix checks are folded into staticcheck and must be opted out of
+      # explicitly to avoid changing the established CI policy during upgrade.
+      checks:
+        - all
+        - "-ST*"
+        - "-QF*"
+  exclusions:
+    generated: lax
+    # These were golangci-lint v1's default exclusions. Declaring them keeps
+    # the existing signal while making the v2 policy explicit and reviewable.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+
+run:
+  modules-download-mode: readonly

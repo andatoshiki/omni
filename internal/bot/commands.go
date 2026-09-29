@@ -47,6 +47,8 @@ func NewCommandHandler(app *App) *CommandHandler {
 	c.routes["clearprompt"] = Route{Handler: command.ClearPrompt, Description: "Clear the custom prompt"}
 	c.routes["export"] = Route{Handler: command.Export, Description: "Export conversation data"}
 	c.routes["summary"] = Route{Handler: command.Summary, Description: "Summarize recent text messages"}
+	c.routes["addusr"] = Route{Handler: command.AddUser, Description: "Admin: allow a user or replied sender"}
+	c.routes["delusr"] = Route{Handler: command.DeleteUser, Description: "Admin: remove a user or replied sender"}
 	c.routes["help"] = Route{Handler: command.Help, Description: "Show help message"}
 	c.routes["start"] = Route{Handler: command.Start, Hidden: true}
 
@@ -99,6 +101,24 @@ func (c *CommandHandler) Reply(ctx context.Context, msg *models.Message, text st
 
 func (c *CommandHandler) AnswerCallback(ctx context.Context, queryID, text string, showAlert bool) {
 	c.app.answerCallback(ctx, queryID, text, showAlert)
+}
+
+func (c *CommandHandler) IsAdmin(userID int64) bool {
+	return c.app.access.isAdmin(userID)
+}
+
+func (c *CommandHandler) IsUserAuthorized(userID int64) bool {
+	return c.app.access.isAuthorized(userID)
+}
+
+func (c *CommandHandler) AddAllowedUser(reference string) (storage.TelegramUser, bool, error) {
+	result, err := c.app.access.add(reference)
+	return result.User, result.Changed, err
+}
+
+func (c *CommandHandler) DeleteAllowedUser(reference string) (storage.TelegramUser, bool, error) {
+	result, err := c.app.access.remove(reference)
+	return result.User, result.Changed, err
 }
 
 func (c *CommandHandler) DeleteSessionCache(sessionID int64) {

@@ -72,6 +72,15 @@ const sqliteSchema = `
 		model TEXT NOT NULL,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS telegram_users (
+		user_id INTEGER PRIMARY KEY,
+		username TEXT,
+		normalized_username TEXT UNIQUE,
+		allowed BOOLEAN NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 `
 
 type sqliteStore struct {

@@ -64,6 +64,15 @@ const mysqlSchema = `
 		model TEXT NOT NULL,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS telegram_users (
+		user_id BIGINT PRIMARY KEY,
+		username VARCHAR(32) NULL,
+		normalized_username VARCHAR(32) NULL UNIQUE,
+		allowed BOOLEAN NOT NULL DEFAULT FALSE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+	);
 	`
 
 type mysqlStore struct {

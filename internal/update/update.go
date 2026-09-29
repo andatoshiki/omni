@@ -354,4 +354,3 @@ released under %s license.
 		l("https://github.com/andatoshiki/omni/blob/master/license", "GPLv3"),
 	)
 }
-

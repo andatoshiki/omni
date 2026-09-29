@@ -23,8 +23,7 @@ global:
   summary_prompt: Summarize with decisions first.
 telegram:
   bot_token: 123:test
-  allowed_user_ids: [10, 10]
-  admin_user_ids: [20]
+  admin_user: 999
   allowed_group_ids: [-100, -100]
 `)
 
@@ -43,8 +42,8 @@ telegram:
 	if got.SummaryPrompt != "Summarize with decisions first." {
 		t.Fatalf("SummaryPrompt = %q, want custom prompt", got.SummaryPrompt)
 	}
-	if !slices.Equal(got.AllowedUserIDs, []int64{10, 20}) {
-		t.Fatalf("AllowedUserIDs = %v, want [10 20]", got.AllowedUserIDs)
+	if got.AdminUser.ID != 999 || got.AdminUser.Username != "" {
+		t.Fatalf("AdminUser = %#v, want numeric ID 999", got.AdminUser)
 	}
 	if !slices.Equal(got.AllowedGroupIDs, []int64{-100}) {
 		t.Fatalf("AllowedGroupIDs = %v, want [-100]", got.AllowedGroupIDs)
@@ -57,6 +56,103 @@ telegram:
 	}
 	if got.Providers[0].Models[0].MaxContextTokens != 12000 {
 		t.Fatalf("MaxContextTokens = %v, want 12000", got.Providers[0].Models[0].MaxContextTokens)
+	}
+}
+
+func TestParseTelegramUserReference(t *testing.T) {
+	tests := []struct {
+		name         string
+		value        string
+		wantID       int64
+		wantUsername string
+		wantError    string
+	}{
+		{name: "numeric ID", value: "123456789", wantID: 123456789},
+		{name: "normalized username", value: "@AndaToshiki", wantUsername: "andatoshiki"},
+		{name: "missing at sign", value: "andatoshiki", wantError: "must start with @"},
+		{name: "non-positive ID", value: "0", wantError: "greater than 0"},
+		{name: "invalid username", value: "@bad-name", wantError: "only letters"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := ParseTelegramUserReference(test.value)
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("ParseTelegramUserReference() error = %v, want %q", err, test.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.ID != test.wantID || got.Username != test.wantUsername {
+				t.Fatalf("ParseTelegramUserReference() = %#v", got)
+			}
+		})
+	}
+}
+
+func TestParamsLoadRejectsLegacyTelegramAccessFields(t *testing.T) {
+	for _, legacyField := range []string{
+		"allowed_user_ids: [10]",
+		"admin_user_ids: [20]",
+	} {
+		filename := writeTestConfig(t, `
+providers:
+  - name: deepseek
+    api_key: sk-test
+    models:
+      - name: deepseek-chat
+telegram:
+  bot_token: 123:test
+  admin_user: 999
+  `+legacyField+`
+`)
+
+		var got Params
+		err := got.Load(filename)
+		if err == nil || !strings.Contains(err.Error(), "field ") {
+			t.Fatalf("Load() error = %v, want rejection for %s", err, legacyField)
+		}
+	}
+}
+
+func TestParamsLoadNormalizesAdminUsername(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: deepseek
+    api_key: sk-test
+    models:
+      - name: deepseek-chat
+telegram:
+  bot_token: 123:test
+  admin_user: "@AndaToshiki"
+`)
+
+	var got Params
+	if err := got.Load(filename); err != nil {
+		t.Fatal(err)
+	}
+	if got.AdminUser.ID != 0 || got.AdminUser.Username != "andatoshiki" {
+		t.Fatalf("AdminUser = %#v", got.AdminUser)
+	}
+}
+
+func TestParamsLoadRequiresAdminUser(t *testing.T) {
+	filename := writeTestConfig(t, `
+providers:
+  - name: deepseek
+    api_key: sk-test
+    models:
+      - name: deepseek-chat
+telegram:
+  bot_token: 123:test
+`)
+
+	var got Params
+	err := got.Load(filename)
+	if err == nil || !strings.Contains(err.Error(), "telegram.admin_user is required") {
+		t.Fatalf("Load() error = %v, want required admin error", err)
 	}
 }
 
@@ -73,6 +169,7 @@ database:
     path: data/omni.db
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -98,6 +195,7 @@ database:
     path: ""
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -121,6 +219,7 @@ database:
     db_name: "  omni  "
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -162,6 +261,7 @@ database:
     `+test.mongodbYAML+`
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 			var got Params
@@ -184,6 +284,7 @@ database:
   backend: unknown
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -205,6 +306,7 @@ global:
   max_context_tokens: 2048
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -223,6 +325,7 @@ providers:
       - name: deepseek-chat
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 	var got Params
 	if err := got.Load(filename); err != nil {
@@ -247,6 +350,7 @@ global:
   summary_prompt: "  "
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -272,6 +376,7 @@ providers:
       - name: gpt-4o
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 	var got Params
 	if err := got.Load(filename); err != nil {
@@ -301,6 +406,7 @@ providers:
         output_price: 10.00
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -322,6 +428,7 @@ providers:
         temperature: 0.7
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -343,6 +450,7 @@ providers:
       - name: grok-2-latest
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -369,6 +477,7 @@ providers:
       - name: openai/gpt-oss-20b
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -406,6 +515,7 @@ global:
   temperature: 1.3
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 			var got Params
@@ -430,6 +540,7 @@ providers:
           effort: high
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -470,6 +581,7 @@ providers:
           `+tt.thinking+`
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 			var got Params
 			err := got.Load(filename)
@@ -493,6 +605,7 @@ providers:
     models: [{name: model-two}]
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -520,6 +633,7 @@ providers:
     unexpected: true
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -540,6 +654,7 @@ global:
   history_size: 0
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -558,6 +673,7 @@ providers:
       - name: deepseek-chat
 telegram:
   bot_token: 123:test
+  admin_user: 999
 groups:
   - id: "@example_group"
     topic: 1
@@ -579,6 +695,7 @@ providers:
       - name: deepseek-chat
 telegram:
   bot_token: 123:test
+  admin_user: 999
   chat_command: chat
 `)
 
@@ -594,6 +711,7 @@ func TestParamsLoadRejectsNoProviders(t *testing.T) {
 providers: []
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params
@@ -613,6 +731,7 @@ providers:
       - name: deepseek-chat
 telegram:
   bot_token: 123:test
+  admin_user: 999
 `)
 
 	var got Params

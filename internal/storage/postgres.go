@@ -72,6 +72,15 @@ const postgresSchema = `
 		model TEXT NOT NULL,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS telegram_users (
+		user_id BIGINT PRIMARY KEY,
+		username TEXT,
+		normalized_username TEXT UNIQUE,
+		allowed BOOLEAN NOT NULL DEFAULT FALSE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
 `
 
 type postgresStore struct {

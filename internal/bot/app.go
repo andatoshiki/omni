@@ -28,6 +28,7 @@ type App struct {
 	logger          *slog.Logger
 	commands        *CommandHandler
 	mediaAggregator *Aggregator
+	access          *accessManager
 	botUsername     string
 }
 
@@ -56,6 +57,11 @@ func New(
 		providers: registry,
 		logger:    logger,
 	}
+	access, err := newAccessManager(store, params.AdminUser, logger)
+	if err != nil {
+		return nil, err
+	}
+	app.access = access
 	client, err := telegram.New(
 		params.BotToken,
 		telegram.WithDefaultHandler(app.updateHandler),
@@ -93,7 +99,7 @@ func (a *App) Run(ctx context.Context) {
 		"bot_username", a.botUsername,
 		"bot_id", a.client.ID(),
 		"allowed_updates", strings.Join([]string(pollingAllowedUpdates), ","),
-		"allowed_user_count", len(a.params.AllowedUserIDs),
+		"allowed_user_count", a.access.allowedCount(),
 		"allowed_group_count", len(a.params.AllowedGroupIDs),
 	)
 	a.client.Start(ctx)
