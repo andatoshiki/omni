@@ -5,6 +5,8 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	telegram "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -103,6 +105,19 @@ func (a *App) processMessages(ctx context.Context, msgs ...*models.Message) {
 		return
 	}
 
+	if msg.Chat.ID < 0 {
+		if prompt, awakened := stripOmniWakeWord(commandText); awakened {
+			a.commands.Chat(ctx, ChatInput{
+				Messages: msgs,
+				Prompt:   prompt,
+				Sender:   sender,
+				Mentions: mentions,
+				Reply:    reply,
+			})
+			return
+		}
+	}
+
 	if msg.Chat.ID >= 0 || replyTargetsBot(msg, a.client.ID()) {
 		a.commands.Chat(ctx, ChatInput{
 			Messages: msgs,
@@ -139,6 +154,71 @@ func stripBotMention(text, botUsername string) (string, bool) {
 
 func isTelegramUsernameCharacter(char byte) bool {
 	return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_'
+}
+
+const omniWakeWord = "omni"
+
+// stripOmniWakeWord detects the single wake word "omni" case-insensitively at
+// the beginning of a message or sentence. It removes the wake word and its
+// adjacent separator while preserving any earlier sentences as model context.
+func stripOmniWakeWord(text string) (string, bool) {
+	atSentenceStart := true
+	for i, char := range text {
+		if atSentenceStart {
+			if unicode.IsSpace(char) {
+				continue
+			}
+			if hasOmniWakeWordAt(text, i) {
+				end := i + len(omniWakeWord)
+				for end < len(text) {
+					separator, size := utf8.DecodeRuneInString(text[end:])
+					if !unicode.IsSpace(separator) && !isWakeWordSeparator(separator) {
+						break
+					}
+					end += size
+				}
+				return strings.TrimSpace(text[:i] + text[end:]), true
+			}
+			atSentenceStart = false
+		}
+
+		if isSentenceTerminator(char) || char == '\n' {
+			atSentenceStart = true
+		}
+	}
+
+	return text, false
+}
+
+func hasOmniWakeWordAt(text string, start int) bool {
+	end := start + len(omniWakeWord)
+	if end > len(text) || !strings.EqualFold(text[start:end], omniWakeWord) {
+		return false
+	}
+	if end == len(text) {
+		return true
+	}
+
+	next, _ := utf8.DecodeRuneInString(text[end:])
+	return next != '_' && !unicode.IsLetter(next) && !unicode.IsDigit(next) && !unicode.IsMark(next)
+}
+
+func isSentenceTerminator(char rune) bool {
+	switch char {
+	case '.', '!', '?', '\u3002', '\uff01', '\uff1f':
+		return true
+	default:
+		return false
+	}
+}
+
+func isWakeWordSeparator(char rune) bool {
+	switch char {
+	case ',', ':', ';', '.', '!', '?', '-', '\u2013', '\u2014', '\uff0c', '\uff1a', '\uff1b', '\u3002', '\uff01', '\uff1f':
+		return true
+	default:
+		return false
+	}
 }
 
 func replyTargetsBot(msg *models.Message, botID int64) bool {
