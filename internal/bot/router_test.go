@@ -122,3 +122,76 @@ func TestStripBotMention(t *testing.T) {
 		})
 	}
 }
+
+func TestStripOmniWakeWord(t *testing.T) {
+	tests := []struct {
+		name       string
+		text       string
+		wantPrompt string
+		wantWake   bool
+	}{
+		{
+			name:       "wake word at message start",
+			text:       "Omni, what is 2+2?",
+			wantPrompt: "what is 2+2?",
+			wantWake:   true,
+		},
+		{
+			name:       "case insensitive wake word",
+			text:       "oMnI: help me",
+			wantPrompt: "help me",
+			wantWake:   true,
+		},
+		{
+			name:       "wake word after sentence",
+			text:       "This is the context. Omni, explain it.",
+			wantPrompt: "This is the context. explain it.",
+			wantWake:   true,
+		},
+		{
+			name:       "wake word after newline",
+			text:       "This is the context:\nOmni — explain it.",
+			wantPrompt: "This is the context:\nexplain it.",
+			wantWake:   true,
+		},
+		{
+			name:       "full width sentence terminator",
+			text:       "Background。Omni，explain it.",
+			wantPrompt: "Background。explain it.",
+			wantWake:   true,
+		},
+		{
+			name:       "wake word only",
+			text:       "Omni",
+			wantPrompt: "",
+			wantWake:   true,
+		},
+		{
+			name:       "wake word in middle of sentence",
+			text:       "Can Omni explain this?",
+			wantPrompt: "Can Omni explain this?",
+			wantWake:   false,
+		},
+		{
+			name:       "longer word does not trigger",
+			text:       "Omnibus routes are useful.",
+			wantPrompt: "Omnibus routes are useful.",
+			wantWake:   false,
+		},
+		{
+			name:       "username style word does not trigger",
+			text:       "omni_bot explain this",
+			wantPrompt: "omni_bot explain this",
+			wantWake:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt, awakened := stripOmniWakeWord(tt.text)
+			if prompt != tt.wantPrompt || awakened != tt.wantWake {
+				t.Fatalf("stripOmniWakeWord(%q) = (%q, %t), want (%q, %t)", tt.text, prompt, awakened, tt.wantPrompt, tt.wantWake)
+			}
+		})
+	}
+}
